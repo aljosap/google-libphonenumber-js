@@ -1,263 +1,133 @@
 name: Build and Publish libphonenumber
 
+permissions:
+  contents: write
+
 on:
-  schedule:
-    # Run weekly to check for new versions
-    - cron: '0 0 * * 1'
   workflow_dispatch:
-    # Allow manual triggering
+  schedule:
+    - cron: '0 3 * * *'
 
 jobs:
-  check-and-build:
+  build-and-publish:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
+      - name: Checkout this repo
         uses: actions/checkout@v4
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
 
-      - name: Set up Java
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'temurin'
-          java-version: '11'
-
-      - name: Install dependencies
+      - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ant ant-contrib maven
+          sudo apt-get install -y openjdk-17-jdk maven git
 
-      - name: Clone libphonenumber repository
+      - name: Get latest libphonenumber release
+        id: get_release
         run: |
-          git clone https://github.com/google/libphonenumber.git libphonenumber-source
-          cd libphonenumber-source
-          CURRENT_VERSION=$(grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' release_notes.txt | head -1 | sed 's/v//')
-          echo "CURRENT_VERSION=$CURRENT_VERSION" >> $GITHUB_ENV
+          latest=$(curl -s https://api.github.com/repos/google/libphonenumber/releases/latest | jq -r .tag_name)
+          echo "latest_tag=$latest" >> $GITHUB_OUTPUT
 
-      - name: Check for new version
-        id: check-version
+      - name: Download Closure Compiler
         run: |
-          if [ -f "version.txt" ]; then
-            PREVIOUS_VERSION=$(cat version.txt)
-            echo "Previous version: $PREVIOUS_VERSION"
-            echo "Current version: $CURRENT_VERSION"
-            if [ "$PREVIOUS_VERSION" = "$CURRENT_VERSION" ]; then
-              echo "No new version available. Skipping build."
-              echo "NEW_VERSION=false" >> $GITHUB_ENV
-            else
-              echo "New version available. Building..."
-              echo "NEW_VERSION=true" >> $GITHUB_ENV
-            fi
-          else
-            echo "No previous version found. Building..."
-            echo "NEW_VERSION=true" >> $GITHUB_ENV
-          fi
+          CLOSURE_VERSION="v20240421"
+          curl -LO "https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/${CLOSURE_VERSION}/closure-compiler-${CLOSURE_VERSION}.jar"
+          mv closure-compiler-${CLOSURE_VERSION}.jar closure-compiler.jar
 
-      - name: Clone dependencies
-        if: env.NEW_VERSION == 'true'
+      - name: Clone libphonenumber and closure-library
         run: |
-          git clone https://github.com/google/closure-library.git
-          git clone https://github.com/google/closure-compiler.git
-          git clone https://github.com/google/closure-linter.git
-          git clone https://github.com/google/python-gflags.git
-          
-          # Checkout specific versions as recommended in the libphonenumber docs
-          cd closure-library && git checkout v20201006 && cd ..
-          cd closure-compiler && git checkout v20210302 && cd ..
+          git clone --depth 1 --branch ${{ steps.get_release.outputs.latest_tag }} https://github.com/google/libphonenumber.git
+          git clone --depth 1 https://github.com/google/closure-library.git
 
-      - name: Build Closure Compiler
-        if: env.NEW_VERSION == 'true'
+      - name: Build libphonenumber JavaScript sources
         run: |
-          cd closure-compiler
-          mvn -DskipTests -pl externs/pom.xml,pom-main.xml,pom-main-shaded.xml
+          cd libphonenumber
+          mvn clean package -Pjavascript
           cd ..
 
-      - name: Build libphonenumber JavaScript
-        if: env.NEW_VERSION == 'true'
+      - name: Run Closure Compiler
         run: |
-          cd libphonenumber-source
-          ant -f javascript/build.xml compile
-          cd ..
-          
-          # Create directory structure for our package
-          mkdir -p dist/lib
-          cp libphonenumber-source/javascript/i18n/phonenumbers/demo-compiled.js dist/lib/libphonenumber.js
-          
-          # Create a minified version
-          npx terser dist/lib/libphonenumber.js -o dist/lib/libphonenumber.min.js
+          mkdir -p dist
+          java -jar closure-compiler.jar \
+            --js_output_file=dist/libphonenumber.js \
+            --compilation_level=ADVANCED \
+            --language_in=ECMASCRIPT5 \
+            --language_out=ECMASCRIPT5 \
+            --js='libphonenumber/javascript/i18n/phonenumbers/*.js' \
+            --js='closure-library/closure/goog/**/*.js' \
+            --entry_point=i18n.phonenumbers.PhoneNumberUtil \
+            --dependency_mode=PRUNE \
+            --generate_exports \
+            --process_common_js_modules \
+            --output_wrapper="(function(){%output%}).call(this);"
 
-      - name: Generate TypeScript definitions
-        if: env.NEW_VERSION == 'true'
+      - name: Add Node.js export
         run: |
-          cat > dist/index.d.ts << 'EOF'
-          declare namespace phoneUtils {
-            function countryCodeToRegionCodeMap(): Record<string, string[]>;
-            function isPossibleNumber(phoneNumber: string, regionCode?: string): boolean;
-            function isPossibleNumberWithReason(phoneNumber: string, regionCode?: string): number;
-            function isValidNumber(phoneNumber: string, regionCode?: string): boolean;
-            function isValidNumberForRegion(phoneNumber: string, regionCode: string): boolean;
-            function getCountryCodeForRegion(regionCode: string): number;
-            function getRegionCodeForNumber(phoneNumber: string, regionCode?: string): string | null;
-            function getNumberType(phoneNumber: string, regionCode?: string): number;
-            function getSupportedRegions(): string[];
-            function formatE164(phoneNumber: string, regionCode?: string): string;
-            function formatNational(phoneNumber: string, regionCode?: string): string;
-            function formatInternational(phoneNumber: string, regionCode?: string): string;
-            function formatInOriginalFormat(phoneNumber: string, regionCode?: string): string;
-            function formatOutOfCountryCallingNumber(phoneNumber: string, regionCode: string, target: string): string;
-          }
+          echo "module.exports = i18n.phonenumbers;" >> dist/libphonenumber.js
 
-          declare class AsYouTypeFormatter {
-            constructor(regionCode?: string);
-            inputDigit(digit: string): string;
-            clear(): void;
-          }
-
-          export { phoneUtils, AsYouTypeFormatter };
-          EOF
-
-      - name: Create package.json
-        if: env.NEW_VERSION == 'true'
+      - name: Determine package version
+        id: versioning
         run: |
-          cat > dist/package.json << EOF
+          # Remove leading 'v' from tag
+          UPSTREAM_VERSION=$(echo "${{ steps.get_release.outputs.latest_tag }}" | sed 's/^v//')
+          # Optionally, add a custom suffix (e.g., -custom.1)
+          PACKAGE_VERSION="${UPSTREAM_VERSION}-custom.1"
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Prepare npm package
+        run: |
+          mkdir -p package/dist
+          cp dist/libphonenumber.js package/dist/
+          # Optionally copy typings and metadata if you have them
+          # cp path/to/index.d.ts package/
+          # cp path/to/metadata.js package/
+          cat > package/package.json <<EOF
           {
-            "name": "google-libphonenumber-js",
-            "version": "$CURRENT_VERSION",
-            "description": "Google's libphonenumber library for JavaScript with TypeScript support",
-            "main": "index.js",
+            "name": "@your-scope/libphonenumber-js",
+            "version": "${PACKAGE_VERSION}",
+            "description": "Node.js build of Google's libphonenumber library (Closure Compiler official build)",
+            "main": "dist/libphonenumber.js",
             "types": "index.d.ts",
-            "scripts": {
-              "test": "echo \"Error: no test specified\" && exit 1"
+            "files": [
+              "dist/",
+              "*.d.ts"
+            ],
+            "repository": {
+              "type": "git",
+              "url": "https://github.com/your/repo.git"
             },
             "keywords": [
               "libphonenumber",
               "phone",
               "validation",
-              "formatting",
-              "telephone"
+              "google",
+              "typescript"
             ],
-            "author": "Your Name",
-            "license": "Apache-2.0",
-            "repository": {
-              "type": "git",
-              "url": "https://github.com/yourusername/google-libphonenumber-js.git"
-            },
-            "bugs": {
-              "url": "https://github.com/yourusername/google-libphonenumber-js/issues"
-            },
-            "homepage": "https://github.com/yourusername/google-libphonenumber-js#readme"
+            "author": "Your Name <your@email.com>",
+            "license": "Apache-2.0"
           }
           EOF
 
-      - name: Create index.js
-        if: env.NEW_VERSION == 'true'
-        run: |
-          cat > dist/index.js << 'EOF'
-          const path = require('path');
-          
-          // Load the library
-          require(path.join(__dirname, 'lib/libphonenumber.js'));
-          
-          // Export the phoneUtils global
-          module.exports = {
-            phoneUtils: global.phoneUtils,
-            AsYouTypeFormatter: global.i18n.phonenumbers.AsYouTypeFormatter
-          };
-          EOF
-
-      - name: Create README.md
-        if: env.NEW_VERSION == 'true'
-        run: |
-          cat > dist/README.md << 'EOF'
-          # google-libphonenumber-js
-
-          A JavaScript version of Google's libphonenumber library with TypeScript support.
-
-          This package is automatically generated from the original Google libphonenumber library.
-
-          ## Installation
-
-          ```bash
-          npm install google-libphonenumber-js
-          ```
-
-          ## Usage
-
-          ```javascript
-          const { phoneUtils } = require('google-libphonenumber-js');
-
-          // Check if a number is valid
-          const isValid = phoneUtils.isValidNumber('+1 650-253-0000', 'US');
-          console.log(isValid); // true
-
-          // Format a number
-          const formatted = phoneUtils.formatInternational('+1 650-253-0000', 'US');
-          console.log(formatted); // +1 650-253-0000
-          ```
-
-          ## TypeScript Support
-
-          This package includes TypeScript definitions:
-
-          ```typescript
-          import { phoneUtils, AsYouTypeFormatter } from 'google-libphonenumber-js';
-
-          // Validate a phone number
-          const isValid: boolean = phoneUtils.isValidNumber('+1 650-253-0000', 'US');
-
-          // Format as you type
-          const formatter = new AsYouTypeFormatter('US');
-          console.log(formatter.inputDigit('6')); // 6
-          console.log(formatter.inputDigit('5')); // 65
-          console.log(formatter.inputDigit('0')); // 650
-          ```
-
-          ## API
-
-          ### phoneUtils
-
-          - `countryCodeToRegionCodeMap()`: Returns a map of country calling codes to region codes
-          - `isPossibleNumber(phoneNumber, regionCode?)`: Checks if a number is possible
-          - `isValidNumber(phoneNumber, regionCode?)`: Checks if a number is valid
-          - `formatE164(phoneNumber, regionCode?)`: Formats a number in E.164 format
-          - `formatNational(phoneNumber, regionCode?)`: Formats a number in national format
-          - `formatInternational(phoneNumber, regionCode?)`: Formats a number in international format
-          - And more...
-
-          ### AsYouTypeFormatter
-
-          - `new AsYouTypeFormatter(regionCode?)`: Creates a new formatter for the specified region
-          - `inputDigit(digit)`: Formats the number as each digit is entered
-          - `clear()`: Clears the formatter state
-
-          ## License
-
-          Apache-2.0 (same as the original libphonenumber library)
-          EOF
-
-      - name: Copy files to repository
-        if: env.NEW_VERSION == 'true'
-        run: |
-          rm -rf lib/
-          mkdir -p lib/
-          cp -r dist/* ./
-          echo "$CURRENT_VERSION" > version.txt
-
-      - name: Commit and push changes
-        if: env.NEW_VERSION == 'true'
-        run: |
-          git config --global user.name "GitHub Action"
-          git config --global user.email "action@github.com"
-          git add .
-          git commit -m "Update to libphonenumber v$CURRENT_VERSION"
-          git push
-
       - name: Publish to npm
-        if: env.NEW_VERSION == 'true'
-        run: npm publish
+        run: |
+          cd package
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
+          npm publish --access public
+          rm -f .npmrc
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Commit and push changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update libphonenumber to ${{ steps.get_release.outputs.latest_tag }} (version ${{ env.PACKAGE_VERSION }})"
+          branch: main
+          file_pattern: 'dist/* package/*'
+          push_options: '--force-with-lease'
+          commit_user_name: github-actions[bot]
+          commit_user_email: github-actions[bot]@users.noreply.github.com
