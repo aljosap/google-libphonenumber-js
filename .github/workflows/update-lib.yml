@@ -275,6 +275,14 @@ jobs:
               "google",
               "typescript"
             ],
+            "devDependencies": {
+            "browserify": "^13.1.0",
+            "eslint": "^7.13.0",
+            "google-closure-compiler": "^20201102.0.1",
+            "google-closure-library": "^20201006.0.0",
+            "mocha": "^8.2.1",
+            "should": "^11.1.0"
+            },
             "author": "Aljosa Petkovic <aljosa3@gmail.com>",
             "license": "Apache-2.0",
             "homepage": "https://github.com/aljosap/google-libphonenumber-js#readme",
