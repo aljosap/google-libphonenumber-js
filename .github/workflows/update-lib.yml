@@ -187,7 +187,7 @@ jobs:
             NEXT_SUFFIX=1
           fi
 
-          NEXT_VERSION="${UPSTREAM_VERSION}-${SUFFIX}.${NEXT_SUFFIX}"
+          NEXT_VERSION="1.1.3"
           if [ -z "$NEXT_VERSION" ]; then
             echo "Error: Could not determine next version"
             exit 1
