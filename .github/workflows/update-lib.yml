@@ -68,7 +68,7 @@ jobs:
           mvn clean package -Pjavascript
           cd ..
 
-      - name: Bundle with Webpack
+      - name: Bundle with Webpack and custom goog
         run: |
           mkdir -p build-workspace
           cd build-workspace
@@ -77,21 +77,89 @@ jobs:
 
           mkdir -p src
 
+          # Create closure-exports.js to properly set up goog
+          cat > src/closure-exports.js << 'EOF'
+          // Minimal goog namespace for libphonenumber
+          var goog = (function() {
+            var g = typeof window !== 'undefined' ? window : global;
+            var goog = g.goog || {};
+            goog.global = g;
+            goog.exportSymbol = function(publicPath, object) {
+              var parts = publicPath.split('.');
+              var cur = g;
+              for (var i = 0; i < parts.length - 1; i++) {
+                if (!cur[parts[i]]) cur[parts[i]] = {};
+                cur = cur[parts[i]];
+              }
+              cur[parts[parts.length - 1]] = object;
+            };
+            goog.provide = function(name) {
+              var parts = name.split('.');
+              var cur = g;
+              for (var i = 0; i < parts.length; i++) {
+                if (!cur[parts[i]]) cur[parts[i]] = {};
+                cur = cur[parts[i]];
+              }
+            };
+            goog.require = function() {};
+            goog.DEBUG = false;
+            goog.LOCALE = 'en';
+            goog.TRUSTED_SITE = true;
+            goog.STRICT_MODE_COMPATIBLE = true;
+            goog.DISALLOW_TEST_ONLY_CODE = true;
+            goog.ENABLE_CHROME_FEATURES = true;
+            goog.dom = {};
+            goog.scope = function(fn) { fn.call(g); };
+            goog.inherits = function(childCtor, parentCtor) {
+              function tempCtor() {}
+              tempCtor.prototype = parentCtor.prototype;
+              childCtor.superClass_ = parentCtor.prototype;
+              childCtor.prototype = new tempCtor();
+              childCtor.prototype.constructor = childCtor;
+            };
+            goog.typeOf = function(value) { return typeof value; };
+            goog.isArrayLike = function(val) {
+              if (!val) return false;
+              var type = typeof val;
+              return type === 'object' && typeof val.length === 'number';
+            };
+            goog.isDef = function(val) { return val !== undefined; };
+            goog.isDefAndNotNull = function(val) { return val != null; };
+            goog.asserts = {
+              assert: function(condition) { if (!condition) throw new Error('Assertion failed'); },
+              assertInstanceof: function(object, type) {
+                if (!(object instanceof type)) throw new Error('Expected instanceof ' + type.name);
+              }
+            };
+            goog.array = {
+              forEach: function(arr, f) { arr.forEach(f); },
+              filter: function(arr, f) { return arr.filter(f); },
+              map: function(arr, f) { return arr.map(f); }
+            };
+            goog.string = {
+              internal: {},
+              newlines: {},
+              isEmpty: function(str) { return !str || str.length === 0; },
+              contains: function(str, substr) { return str.indexOf(substr) !== -1; }
+            };
+            goog.i18n = goog.i18n || {};
+            goog.i18n.phonenumbers = goog.i18n.phonenumbers || {};
+            return goog;
+          })();
+
+          if (typeof window !== 'undefined') {
+            window.goog = goog;
+          }
+          if (typeof global !== 'undefined') {
+            global.goog = goog;
+          }
+
+          module.exports = goog;
+          EOF
+
           # Create webpack entry point
           cat > src/index.js << 'EOF'
-          // Set up closure library exports
-          if (typeof window === 'undefined') global.window = {};
-          window.goog = {};
-          window.COMPILED = false;
-
-          // Import closure library base
-          require('../../closure-library/closure/goog/base.js');
-          require('../../closure-library/closure/goog/reflect/reflect.js');
-          require('../../closure-library/closure/goog/math/math.js');
-          require('../../closure-library/closure/goog/math/long.js');
-          require('../../closure-library/closure/goog/string/string.js');
-          require('../../closure-library/closure/goog/asserts/asserts.js');
-          require('../../closure-library/closure/goog/proto2/message.js');
+          require('./closure-exports.js');
 
           // Import libphonenumber
           require('../../libphonenumber/javascript/i18n/phonenumbers/phonemetadata.pb.js');
@@ -187,7 +255,7 @@ jobs:
             NEXT_SUFFIX=1
           fi
 
-          NEXT_VERSION="1.1.3"
+          NEXT_VERSION="1.1.4"
           if [ -z "$NEXT_VERSION" ]; then
             echo "Error: Could not determine next version"
             exit 1
