@@ -62,7 +62,7 @@ jobs:
           cp libphonenumber/javascript/i18n/phonenumbers/*.js build-workspace/src/
           cd build-workspace
           npm init -y
-          npm install --save-dev google-closure-compiler browserify google-closure-library
+          npm install --save-dev google-closure-compiler@20201102.0.1  google-closure-library@20201006.0.0 browserify@13.1.0 eslint@7.13.0 mocha@8.2.1 should@11.1.0
           
           # Create index.js with proper exports
           cat > src/index.js << 'EOF'
