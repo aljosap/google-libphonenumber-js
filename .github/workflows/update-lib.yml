@@ -87,7 +87,7 @@ jobs:
           commit_user_email: github-actions[bot]@users.noreply.github.com
 
       # Optionally, you can add a step to publish to npm if you want to automate that as well
-      # - name: Publish to npm
-      #   run: npm publish
-      #   env:
-      #     NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
