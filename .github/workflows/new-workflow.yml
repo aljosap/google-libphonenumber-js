@@ -98,30 +98,41 @@ jobs:
           # Convert array to space-separated string with --js prefix
           JS_FILES=$(printf -- '--js=%s ' "${SOURCES[@]}")
           
+          # Define compilation flags in dependency order
+          CLOSURE_FLAGS=(
+            "--js_output_file=dist/libphonenumber.js"
+            "--compilation_level=ADVANCED"
+            "--language_in=ECMASCRIPT_2020"
+            "--language_out=ECMASCRIPT_2015"
+            "--entry_point=i18n.phonenumbers.PhoneNumberUtil"
+            "--dependency_mode=PRUNE"
+            "--generate_exports"
+            "--process_common_js_modules"
+            "--warning_level=QUIET"
+            # Base definitions first
+            "--define=goog.DEBUG=false"
+            "--define=goog.FEATURESET_YEAR=2012"
+            "--define=goog.TRUSTED_SITE=false"
+            "--define=goog.TRUSTED_TYPES_POLICY_NAME=''"
+            "--define=goog.STRICT_MODE_COMPATIBLE=true"
+            "--define=goog.ENABLE_DEBUG_LOADER=false"
+            # Dependent definitions
+            "--define=goog.NATIVE_ARRAY_PROTOTYPES=false"
+            "--define=goog.array.ASSUME_NATIVE_FUNCTIONS=false"
+            "--define=goog.asserts.ENABLE_ASSERTS=false"
+            "--define=goog.html.SafeHtml.ENABLE_ERROR_MESSAGES=false"
+            "--define=goog.html.trustedtypes.POLICY_NAME=''"
+            # Additional safety definitions
+            "--define=goog.dom.ASSUME_STANDARDS_MODE=true"
+            "--define=goog.ENABLE_CHROME_APP_SAFE_SCRIPT_LOADING=false"
+            "--output_wrapper=(function(){%output%}).call(this);"
+          )
+          
+          # Run Closure Compiler with all flags
           java -jar closure-compiler.jar \
-            --js_output_file=dist/libphonenumber.js \
-            --compilation_level=ADVANCED \
-            --language_in=ECMASCRIPT_2020 \
-            --language_out=ECMASCRIPT_2015 \
             ${JS_FILES} \
             --js="$(pwd)/closure-library/closure/goog/**/*.js" \
-            --entry_point=i18n.phonenumbers.PhoneNumberUtil \
-            --dependency_mode=PRUNE \
-            --generate_exports \
-            --process_common_js_modules \
-            --warning_level=QUIET \
-            --define="goog.DEBUG=false" \
-            --define="goog.STRICT_MODE_COMPATIBLE=true" \
-            --define="goog.ENABLE_DEBUG_LOADER=false" \
-            --define="goog.NATIVE_ARRAY_PROTOTYPES=false" \
-            --define="goog.array.ASSUME_NATIVE_FUNCTIONS=false" \
-            --define="goog.asserts.ENABLE_ASSERTS=false" \
-            --define="goog.html.SafeHtml.ENABLE_ERROR_MESSAGES=false" \
-            --define="goog.html.trustedtypes.POLICY_NAME=''" \
-            --define="goog.TRUSTED_TYPES_POLICY_NAME=''" \
-            --define="goog.TRUSTED_SITE=true" \
-            --define="goog.FEATURESET_YEAR=2012" \
-            --output_wrapper="(function(){%output%}).call(this);"
+            "${CLOSURE_FLAGS[@]}"
 
       - name: Add Node.js export
         run: |
