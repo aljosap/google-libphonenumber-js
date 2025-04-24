@@ -72,19 +72,10 @@ jobs:
         run: |
           mkdir -p build-workspace
           cd build-workspace
-          
-          # Initialize package.json with dev dependencies
-          cat > package.json << 'EOF'
-          {
-            "name": "build-workspace",
-            "version": "1.0.0",
-            "private": true,
-          }
-          EOF
-          
-          # Install dependencies
-          npm install
-
+          # Minimal valid package.json (no devDependencies)
+          echo '{"name":"build-workspace","version":"1.0.0","private":true}' > package.json
+          # Install build dependencies directly
+          npm install --save-dev webpack webpack-cli terser-webpack-plugin
           mkdir -p src
           cd ..
 
@@ -357,7 +348,7 @@ jobs:
             NEXT_SUFFIX=1
           fi
 
-          NEXT_VERSION="1.1.5"
+          NEXT_VERSION="1.1.6"
           if [ -z "$NEXT_VERSION" ]; then
             echo "Error: Could not determine next version"
             exit 1
