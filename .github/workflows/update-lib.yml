@@ -77,6 +77,27 @@ jobs:
           rm -rf generated-js
           echo "${{ steps.get_release.outputs.latest_tag }}" > LIBPHONENUMBER_VERSION
 
+      - name: Determine next package version
+        id: versioning
+        run: |
+          UPSTREAM_VERSION=$(echo "${{ steps.get_release.outputs.latest_tag }}" | sed 's/^v//')
+          SUFFIX="aljosa"
+          if [ -f MY_VERSION ]; then
+            LAST_VERSION=$(cat MY_VERSION)
+            LAST_UPSTREAM=$(echo "$LAST_VERSION" | sed 's/-'"$SUFFIX"'.*//')
+            if [ "$LAST_UPSTREAM" = "$UPSTREAM_VERSION" ]; then
+              LAST_SUFFIX=$(echo "$LAST_VERSION" | sed 's/.*-'"$SUFFIX"'.//')
+              NEXT_SUFFIX=$((LAST_SUFFIX + 1))
+            else
+              NEXT_SUFFIX=1
+            fi
+          else
+            NEXT_SUFFIX=1
+          fi
+          NEXT_VERSION="${UPSTREAM_VERSION}-${SUFFIX}.${NEXT_SUFFIX}"
+          echo "$NEXT_VERSION" > MY_VERSION
+          echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
+
       - name: Generate TypeScript definitions
         run: |
           cd src/libphonenumber-js
@@ -212,11 +233,10 @@ jobs:
 
       - name: Generate package.json in generated directory
         run: |
-          VERSION=$(echo "${{ steps.get_release.outputs.latest_tag }}" | sed 's/^v//')
           cat > src/libphonenumber-js/package.json <<EOF
           {
             "name": "@aljosap/libphonenumber-js",
-            "version": "$VERSION",
+            "version": "${{ steps.versioning.outputs.next_version }}",
             "description": "JavaScript build of Google's libphonenumber library",
             "main": "libphonenumber.js",
             "types": "libphonenumber.d.ts",
@@ -258,3 +278,13 @@ jobs:
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Commit and push changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update libphonenumber to ${{ steps.get_release.outputs.latest_tag }} (version ${{ steps.versioning.outputs.next_version }})"
+          branch: main
+          file_pattern: 'src/libphonenumber-js/* LIBPHONENUMBER_VERSION MY_VERSION'
+          push_options: '--force-with-lease'
+          commit_user_name: github-actions[bot]
+          commit_user_email: github-actions[bot]@users.noreply.github.com
