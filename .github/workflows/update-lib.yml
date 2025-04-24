@@ -65,6 +65,8 @@ jobs:
         run: |
           cd libphonenumber
           mvn clean package -Pjavascript
+          echo "==== Contents of libphonenumber/javascript after build ===="
+          ls -lR javascript
           cp -r javascript ../generated-js
           cd ..
           rm -rf libphonenumber
@@ -74,6 +76,8 @@ jobs:
           rm -rf src/libphonenumber-js
           mkdir -p src/libphonenumber-js
           cp -r generated-js/* src/libphonenumber-js/
+          echo "==== Contents of src/libphonenumber-js after copy ===="
+          ls -lR src/libphonenumber-js
           rm -rf generated-js
           echo "${{ steps.get_release.outputs.latest_tag }}" > LIBPHONENUMBER_VERSION
 
@@ -98,16 +102,24 @@ jobs:
           echo "$NEXT_VERSION" > MY_VERSION
           echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
 
+      - name: List generated files
+        run: |
+          echo "==== Listing all files in src/libphonenumber-js ===="
+          find src/libphonenumber-js -type f
+
       - name: Prepare dist directory and minify JS
         run: |
           cd src/libphonenumber-js
           mkdir -p dist
-          # Find the main JS file (adjust if needed)
-          MAIN_JS=$(ls | grep -E 'libphonenumber.*\.js$' | head -n1)
+          # Try to find a likely main JS file
+          MAIN_JS=$(find . -type f -name "*.js" | grep -v "dist/" | grep -v "test" | grep -v "node_modules" | head -n1)
           if [ -z "$MAIN_JS" ]; then
             echo "Could not find main JS file!"
+            echo "==== Directory contents for debugging ===="
+            find . -type f
             exit 1
           fi
+          echo "Found main JS file: $MAIN_JS"
           cp "$MAIN_JS" dist/libphonenumber.js
           npm install terser
           npx terser dist/libphonenumber.js -o dist/libphonenumber.min.js --compress --mangle
