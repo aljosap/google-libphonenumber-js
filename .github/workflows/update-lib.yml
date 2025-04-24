@@ -116,10 +116,22 @@ jobs:
           }
           EOF
 
+      - name: Check for NODE_AUTH_TOKEN
+        run: |
+         if [ -z "$NODE_AUTH_TOKEN" ]; then
+         echo "NODE_AUTH_TOKEN is not set!"
+         exit 1
+         else
+         echo "NODE_AUTH_TOKEN is set."
+         fi
+        env:
+         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish to npm
         run: |
           cd src/libphonenumber-js
           npm install
+          npm config set registry https://registry.npmjs.org/
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
