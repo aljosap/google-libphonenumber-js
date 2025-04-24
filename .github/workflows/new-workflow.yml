@@ -89,8 +89,8 @@ jobs:
           java -jar closure-compiler.jar \
             --js_output_file=dist/libphonenumber.js \
             --compilation_level=ADVANCED \
-            --language_in=ECMASCRIPT5 \
-            --language_out=ECMASCRIPT5 \
+            --language_in=ECMASCRIPT_2020 \
+            --language_out=ECMASCRIPT_2015 \
             --js="$(pwd)/libphonenumber/javascript/i18n/phonenumbers/*.js" \
             --js="$(pwd)/closure-library/closure/goog/**/*.js" \
             --entry_point=i18n.phonenumbers.PhoneNumberUtil \
