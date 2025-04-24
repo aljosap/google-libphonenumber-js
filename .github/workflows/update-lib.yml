@@ -86,6 +86,36 @@ jobs:
           commit_user_name: github-actions[bot]
           commit_user_email: github-actions[bot]@users.noreply.github.com
 
+      - name: Generate package.json in generated directory
+        run: |
+          VERSION=$(echo "${{ steps.get_release.outputs.latest_tag }}" | sed 's/^v//')
+          cat > src/libphonenumber-js/package.json <<EOF
+          {
+          "name": "libphonenumber-js",
+          "version": "$VERSION",
+          "description": "JavaScript build of Google's libphonenumber library",
+          "main": "libphonenumber.js",
+          "files": [
+            "*.js",
+            "*.d.ts",
+            "resources/"
+          ],
+          "repository": {
+          "type": "git",
+          "url": "https://github.com/yourusername/google-libphonenumber-js.git"
+          },
+          "keywords": [
+          "libphonenumber",
+          "phone",
+          "validation",
+          "google"
+          ],
+          "author": "Aljosa Petkovic <aljosa3@gmail.com>",
+          "license": "Apache-2.0",
+          "homepage": "https://github.com/aljosap/google-libphonenumber-js#readme"
+          }
+          EOF
+
       - name: Publish to npm
         run: |
           cd src/libphonenumber-js
