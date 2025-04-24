@@ -79,15 +79,6 @@ jobs:
             "name": "build-workspace",
             "version": "1.0.0",
             "private": true,
-            "devDependencies": {
-              "webpack": "^5.89.0",
-              "webpack-cli": "^5.1.4",
-              "terser-webpack-plugin": "^5.3.9",
-              "google-closure-compiler": "^20231112.0.0",
-              "google-closure-library": "^20231110.0.0",
-              "browserify": "^17.0.0",
-              "eslint": "^8.54.0"
-            }
           }
           EOF
           
