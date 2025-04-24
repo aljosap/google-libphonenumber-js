@@ -141,10 +141,16 @@ jobs:
             --js=src/shortnumberinfo.js \
             --js=src/shortnumbermetadata.js \
             --js=src/asyoutypeformatter.js \
-            --js_output_file=dist/libphonenumber.original.js \
-          ./node_modules/.bin/browserify dist/libphonenumber.original.js --standalone libphonenumber --no-browser-field --outfile dist/libphonenumber.js
-          rm dist/libphonenumber.original.js
-          cd ..
+            --js_output_file=dist/libphonenumber.original.js
+            
+            # Then use browserify to create the final bundle
+            ./node_modules/.bin/browserify dist/libphonenumber.closure.js \
+            -s libphonenumber \
+            -o dist/libphonenumber.js
+
+          # Clean up intermediate file
+            rm dist/libphonenumber.closure.js
+            cd ..
 
       - name: Copy build artifacts
         run: |
