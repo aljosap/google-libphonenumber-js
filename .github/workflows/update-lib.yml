@@ -1,5 +1,8 @@
 name: Update libphonenumber JavaScript
 
+permissions:
+  contents: write
+  
 on:
   workflow_dispatch: # manual trigger
   schedule:
