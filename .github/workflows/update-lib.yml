@@ -4,123 +4,152 @@ permissions:
   contents: write
   
 on:
-  workflow_dispatch: # manual trigger
+  workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *' # daily at 3am UTC
+    - cron: '0 3 * * *'
 
 jobs:
   update-libphonenumber:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout this repo
-        uses: actions/checkout@v4
+      # ... (keep all previous steps until "Generate package.json") ...
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Get latest libphonenumber release
-        id: get_release
+      - name: Generate TypeScript definitions
         run: |
-          latest=$(curl -s https://api.github.com/repos/google/libphonenumber/releases/latest | jq -r .tag_name)
-          echo "latest_tag=$latest" >> $GITHUB_OUTPUT
+          cd src/libphonenumber-js
+          
+          # Create main TypeScript declaration file
+          cat > libphonenumber.d.ts << 'EOF'
+          declare namespace libphonenumber {
+            export class PhoneNumberUtil {
+              static getInstance(): PhoneNumberUtil;
+              parse(number: string, region?: string): PhoneNumber;
+              format(number: PhoneNumber, format: PhoneNumberFormat): string;
+              isValidNumber(number: PhoneNumber): boolean;
+              isValidNumberForRegion(number: PhoneNumber, region: string): boolean;
+              getRegionCodeForNumber(number: PhoneNumber): string | null;
+              getNumberType(number: PhoneNumber): PhoneNumberType;
+              isPossibleNumber(number: PhoneNumber): boolean;
+              isPossibleNumberString(number: string, regionDialingFrom?: string): boolean;
+              truncateTooLongNumber(number: PhoneNumber): boolean;
+              isNumberMatch(firstNumber: string | PhoneNumber, secondNumber: string | PhoneNumber): MatchType;
+              findNumbers(text: string, defaultRegion?: string): PhoneNumberMatch[];
+              parseAndKeepRawInput(number: string, regionCode?: string): PhoneNumber;
+            }
 
-      - name: Read current version
-        id: read_version
-        run: |
-          if [ -f LIBPHONENUMBER_VERSION ]; then
-            current=$(cat LIBPHONENUMBER_VERSION)
-          else
-            current=""
-          fi
-          echo "current_tag=$current" >> $GITHUB_OUTPUT
+            export class PhoneNumber {
+              getCountryCode(): number;
+              getNationalNumber(): number;
+              getExtension(): string | null;
+              clearExtension(): void;
+              getNumberOfLeadingZeros(): number;
+              setNumberOfLeadingZeros(numberOfLeadingZeros: number): void;
+              hasNumberOfLeadingZeros(): boolean;
+              clearNumberOfLeadingZeros(): void;
+              isItalianLeadingZero(): boolean;
+              setItalianLeadingZero(isLeadingZero: boolean): void;
+              hasItalianLeadingZero(): boolean;
+              clearItalianLeadingZero(): void;
+              getRawInput(): string | null;
+              setRawInput(rawInput: string): void;
+              hasRawInput(): boolean;
+              clearRawInput(): void;
+              getCountryCodeSource(): PhoneNumber.CountryCodeSource;
+              setCountryCodeSource(countryCodeSource: PhoneNumber.CountryCodeSource): void;
+              hasCountryCodeSource(): boolean;
+              clearCountryCodeSource(): void;
+              getPreferredDomesticCarrierCode(): string | null;
+              setPreferredDomesticCarrierCode(preferredDomesticCarrierCode: string): void;
+              hasPreferredDomesticCarrierCode(): boolean;
+              clearPreferredDomesticCarrierCode(): void;
+            }
 
-      - name: Check if update is needed
-        id: check_update
-        run: |
-          if [ "${{ steps.get_release.outputs.latest_tag }}" = "${{ steps.read_version.outputs.current_tag }}" ]; then
-            echo "No update needed."
-            echo "update_needed=false" >> $GITHUB_OUTPUT
-          else
-            echo "Update needed."
-            echo "update_needed=true" >> $GITHUB_OUTPUT
-          fi
+            export class PhoneNumberMatch {
+              start(): number;
+              end(): number;
+              number(): PhoneNumber;
+              rawString(): string;
+            }
 
-      - name: Exit if no update needed
-        if: steps.check_update.outputs.update_needed == 'false'
-        run: exit 0
+            export enum PhoneNumberFormat {
+              E164 = 0,
+              INTERNATIONAL = 1,
+              NATIONAL = 2,
+              RFC3966 = 3
+            }
 
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y openjdk-17-jdk maven git protobuf-compiler
-      - name: Clone libphonenumber
-        run: |
-          git clone --depth 1 --branch ${{ steps.get_release.outputs.latest_tag }} https://github.com/google/libphonenumber.git
+            export enum PhoneNumberType {
+              FIXED_LINE = 0,
+              MOBILE = 1,
+              FIXED_LINE_OR_MOBILE = 2,
+              TOLL_FREE = 3,
+              PREMIUM_RATE = 4,
+              SHARED_COST = 5,
+              VOIP = 6,
+              PERSONAL_NUMBER = 7,
+              PAGER = 8,
+              UAN = 9,
+              VOICEMAIL = 10,
+              UNKNOWN = -1
+            }
 
-      - name: Generate JavaScript version
-        run: |
-          cd libphonenumber
-          mvn clean package -Pjavascript
-          cp -r javascript ../generated-js
-          cd ..
-          rm -rf libphonenumber
+            export enum MatchType {
+              NOT_A_NUMBER = 0,
+              NO_MATCH = 1,
+              SHORT_NSN_MATCH = 2,
+              NSN_MATCH = 3,
+              EXACT_MATCH = 4
+            }
 
-      - name: Update generated code in repo
-        run: |
-          rm -rf src/libphonenumber-js
-          mkdir -p src/libphonenumber-js
-          cp -r generated-js/* src/libphonenumber-js/
-          rm -rf generated-js
-          echo "${{ steps.get_release.outputs.latest_tag }}" > LIBPHONENUMBER_VERSION
+            export namespace PhoneNumber {
+              export enum CountryCodeSource {
+                FROM_NUMBER_WITH_PLUS_SIGN = 1,
+                FROM_NUMBER_WITH_IDD = 5,
+                FROM_NUMBER_WITHOUT_PLUS_SIGN = 10,
+                FROM_DEFAULT_COUNTRY = 20
+              }
+            }
 
-      - name: Commit and push changes
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "chore: update libphonenumber to ${{ steps.get_release.outputs.latest_tag }}"
-          branch: main
-          file_pattern: 'src/libphonenumber-js/* LIBPHONENUMBER_VERSION'
-          push_options: '--force-with-lease'
-          commit_user_name: github-actions[bot]
-          commit_user_email: github-actions[bot]@users.noreply.github.com
+            export class AsYouTypeFormatter {
+              constructor(region: string);
+              inputDigit(digit: string): string;
+              clear(): void;
+              inputDigitAndRememberPosition(digit: string): string;
+              getRememberedPosition(): number;
+            }
 
-      # - name: Generate package.json in generated directory
-      #   run: |
-      #     VERSION=$(echo "${{ steps.get_release.outputs.latest_tag }}" | sed 's/^v//')
-      #     cat > src/libphonenumber-js/package.json <<EOF
-      #     {
-      #     "name": "libphonenumber-js",
-      #     "version": "$VERSION",
-      #     "description": "JavaScript build of Google's libphonenumber library",
-      #     "main": "libphonenumber.js",
-      #     "files": [
-      #       "*.js",
-      #       "*.d.ts",
-      #       "resources/"
-      #     ],
-      #     "repository": {
-      #     "type": "git",
-      #     "url": "https://github.com/aljosap/google-libphonenumber-js.git"
-      #     },
-      #     "keywords": [
-      #     "libphonenumber",
-      #     "phone",
-      #     "validation",
-      #     "google"
-      #     ],
-      #     "author": "Aljosa Petkovic <aljosa3@gmail.com>",
-      #     "license": "Apache-2.0",
-      #     "homepage": "https://github.com/aljosap/google-libphonenumber-js#readme"
-      #     }
-      #     EOF
+            export class ShortNumberInfo {
+              static getInstance(): ShortNumberInfo;
+              isPossibleShortNumber(number: PhoneNumber): boolean;
+              isValidShortNumber(number: PhoneNumber): boolean;
+              isPossibleShortNumberForRegion(number: PhoneNumber, regionCode: string): boolean;
+              isValidShortNumberForRegion(number: PhoneNumber, regionCode: string): boolean;
+              getExpectedCost(number: PhoneNumber): ShortNumberCost;
+              getExpectedCostForRegion(number: PhoneNumber, regionCode: string): ShortNumberCost;
+            }
 
-      - name: Setup Node.js for npm publishing
-        uses: actions/setup-node@v4
-        with:
-            node-version: '20'
-            registry-url: 'https://registry.npmjs.org/'
+            export enum ShortNumberCost {
+              PREMIUM_RATE = 0,
+              STANDARD_RATE = 1,
+              TOLL_FREE = 2,
+              UNKNOWN_COST = 3
+            }
+
+            export class MetadataLoader {
+              loadMetadata(metadataPath: string): void;
+            }
+          }
+
+          declare module 'libphonenumber-js' {
+            export = libphonenumber;
+          }
+          EOF
+
+          # Create index.d.ts that re-exports everything
+          cat > index.d.ts << 'EOF'
+          export * from './libphonenumber';
+          EOF
 
       - name: Generate package.json in generated directory
         run: |
@@ -131,6 +160,7 @@ jobs:
             "version": "$VERSION",
             "description": "JavaScript build of Google's libphonenumber library",
             "main": "libphonenumber.js",
+            "types": "libphonenumber.d.ts",
             "files": [
               "*.js",
               "*.d.ts",
@@ -144,13 +174,23 @@ jobs:
               "libphonenumber",
               "phone",
               "validation",
-              "google"
+              "google",
+              "typescript"
             ],
             "author": "Aljosa Petkovic <aljosa3@gmail.com>",
             "license": "Apache-2.0",
-            "homepage": "https://github.com/aljosap/google-libphonenumber-js#readme"
+            "homepage": "https://github.com/aljosap/google-libphonenumber-js#readme",
+            "engines": {
+              "node": ">=14.0.0"
+            }
           }
           EOF
+
+      - name: Setup Node.js for npm publishing
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org/'
 
       - name: Publish to npm
         run: |
