@@ -276,6 +276,7 @@ jobs:
           cd src/libphonenumber-js
           echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
           npm publish --access public
+          rm -f .npmrc
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
