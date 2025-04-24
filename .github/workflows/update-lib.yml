@@ -94,9 +94,11 @@ jobs:
           rm -rf dist && mkdir dist
           ./node_modules/.bin/google-closure-compiler \
             --compilation_level=SIMPLE \
+            --warning_level=QUIET \
+            --js=node_modules/google-closure-library/closure/goog/base.js \
             --js=node_modules/google-closure-library/closure/goog/array/array.js \
             --js=node_modules/google-closure-library/closure/goog/asserts/asserts.js \
-            --js=node_modules/google-closure-library/closure/goog/base.js \
+            --js=node_modules/google-closure-library/closure/goog/asserts/dom.js \
             --js=node_modules/google-closure-library/closure/goog/debug/error.js \
             --js=node_modules/google-closure-library/closure/goog/dom/asserts.js \
             --js=node_modules/google-closure-library/closure/goog/dom/htmlelement.js \
@@ -118,6 +120,10 @@ jobs:
             --js=node_modules/google-closure-library/closure/goog/i18n/bidi.js \
             --js=node_modules/google-closure-library/closure/goog/labs/useragent/browser.js \
             --js=node_modules/google-closure-library/closure/goog/labs/useragent/util.js \
+            --js=node_modules/google-closure-library/closure/goog/labs/useragent/useragent.js \
+            --js=node_modules/google-closure-library/closure/goog/labs/useragent/highentropy/highentropyvalue.js \
+            --js=node_modules/google-closure-library/closure/goog/labs/useragent/highentropy/highentropydata.js \
+            --js=node_modules/google-closure-library/closure/goog/labs/useragent/highentropy/util.js \
             --js=node_modules/google-closure-library/closure/goog/object/object.js \
             --js=node_modules/google-closure-library/closure/goog/proto2/descriptor.js \
             --js=node_modules/google-closure-library/closure/goog/proto2/fielddescriptor.js \
@@ -130,9 +136,6 @@ jobs:
             --js=node_modules/google-closure-library/closure/goog/string/string.js \
             --js=node_modules/google-closure-library/closure/goog/string/stringbuffer.js \
             --js=node_modules/google-closure-library/closure/goog/string/typedstring.js \
-            --js=node_modules/google-closure-library/closure/goog/labs/useragent/highentropy/*.js \
-            --js=node_modules/google-closure-library/closure/goog/labs/useragent/*.js \
-            --js=node_modules/google-closure-library/closure/goog/asserts/*.js \
             --js=src/index.js \
             --js=src/metadata.js \
             --js=src/phonemetadata.pb.js \
@@ -141,13 +144,13 @@ jobs:
             --js=src/shortnumberinfo.js \
             --js=src/shortnumbermetadata.js \
             --js=src/asyoutypeformatter.js \
-            --js_output_file=dist/libphonenumber.original.js
-            
-            # Then use browserify to create the final bundle
-            ./node_modules/.bin/browserify dist/libphonenumber.closure.js \
+            --js_output_file=dist/libphonenumber.closure.js
+
+          # Then use browserify to create the final bundle
+          ./node_modules/.bin/browserify dist/libphonenumber.closure.js \
             -s libphonenumber \
             -o dist/libphonenumber.js
-
+            
           # Clean up intermediate file
             rm dist/libphonenumber.closure.js
             cd ..
