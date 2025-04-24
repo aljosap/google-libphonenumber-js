@@ -131,6 +131,7 @@ jobs:
             --js=node_modules/google-closure-library/closure/goog/string/string.js \
             --js=node_modules/google-closure-library/closure/goog/string/stringbuffer.js \
             --js=node_modules/google-closure-library/closure/goog/string/typedstring.js \
+            --js=node_modules/google-closure-library/closure/goog/asserts/dom.js \
             --js=src/index.js \
             --js=src/metadata.js \
             --js=src/phonemetadata.pb.js \
@@ -237,10 +238,13 @@ jobs:
               "node": ">=14.0.0"
             },
             "devDependencies": {
-            "google-closure-compiler": "latest",
-            "browserify": "latest",
-            "google-closure-library": "latest"
-            }
+              "browserify": "^13.1.0",
+              "eslint": "^7.13.0",
+              "google-closure-compiler": "^20201102.0.1",
+              "google-closure-library": "^20201006.0.0",
+              "mocha": "^8.2.1",
+              "should": "^11.1.0"
+            },
           }
           EOF
 
