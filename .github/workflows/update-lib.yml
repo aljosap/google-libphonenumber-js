@@ -52,8 +52,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y openjdk-17-jdk maven git
-
+          sudo apt-get install -y openjdk-17-jdk maven git protobuf-compiler
       - name: Clone libphonenumber
         run: |
           git clone --depth 1 --branch ${{ steps.get_release.outputs.latest_tag }} https://github.com/google/libphonenumber.git
