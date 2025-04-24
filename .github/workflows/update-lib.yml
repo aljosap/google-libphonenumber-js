@@ -86,52 +86,76 @@ jobs:
           commit_user_name: github-actions[bot]
           commit_user_email: github-actions[bot]@users.noreply.github.com
 
+      # - name: Generate package.json in generated directory
+      #   run: |
+      #     VERSION=$(echo "${{ steps.get_release.outputs.latest_tag }}" | sed 's/^v//')
+      #     cat > src/libphonenumber-js/package.json <<EOF
+      #     {
+      #     "name": "libphonenumber-js",
+      #     "version": "$VERSION",
+      #     "description": "JavaScript build of Google's libphonenumber library",
+      #     "main": "libphonenumber.js",
+      #     "files": [
+      #       "*.js",
+      #       "*.d.ts",
+      #       "resources/"
+      #     ],
+      #     "repository": {
+      #     "type": "git",
+      #     "url": "https://github.com/aljosap/google-libphonenumber-js.git"
+      #     },
+      #     "keywords": [
+      #     "libphonenumber",
+      #     "phone",
+      #     "validation",
+      #     "google"
+      #     ],
+      #     "author": "Aljosa Petkovic <aljosa3@gmail.com>",
+      #     "license": "Apache-2.0",
+      #     "homepage": "https://github.com/aljosap/google-libphonenumber-js#readme"
+      #     }
+      #     EOF
+
+      - name: Setup Node.js for npm publishing
+        uses: actions/setup-node@v4
+        with:
+            node-version: '20'
+            registry-url: 'https://registry.npmjs.org/'
+
       - name: Generate package.json in generated directory
         run: |
           VERSION=$(echo "${{ steps.get_release.outputs.latest_tag }}" | sed 's/^v//')
           cat > src/libphonenumber-js/package.json <<EOF
           {
-          "name": "libphonenumber-js",
-          "version": "$VERSION",
-          "description": "JavaScript build of Google's libphonenumber library",
-          "main": "libphonenumber.js",
-          "files": [
-            "*.js",
-            "*.d.ts",
-            "resources/"
-          ],
-          "repository": {
-          "type": "git",
-          "url": "https://github.com/yourusername/google-libphonenumber-js.git"
-          },
-          "keywords": [
-          "libphonenumber",
-          "phone",
-          "validation",
-          "google"
-          ],
-          "author": "Aljosa Petkovic <aljosa3@gmail.com>",
-          "license": "Apache-2.0",
-          "homepage": "https://github.com/aljosap/google-libphonenumber-js#readme"
+            "name": "@aljosap/libphonenumber-js",
+            "version": "$VERSION",
+            "description": "JavaScript build of Google's libphonenumber library",
+            "main": "libphonenumber.js",
+            "files": [
+              "*.js",
+              "*.d.ts",
+              "resources/"
+            ],
+            "repository": {
+              "type": "git",
+              "url": "https://github.com/aljosap/google-libphonenumber-js.git"
+            },
+            "keywords": [
+              "libphonenumber",
+              "phone",
+              "validation",
+              "google"
+            ],
+            "author": "Aljosa Petkovic <aljosa3@gmail.com>",
+            "license": "Apache-2.0",
+            "homepage": "https://github.com/aljosap/google-libphonenumber-js#readme"
           }
           EOF
-
-      - name: Check for NODE_AUTH_TOKEN
-        run: |
-         if [ -z "$NODE_AUTH_TOKEN" ]; then
-         echo "NODE_AUTH_TOKEN is not set!"
-         exit 1
-         else
-         echo "NODE_AUTH_TOKEN is set."
-         fi
-        env:
-         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish to npm
         run: |
           cd src/libphonenumber-js
-          npm install
-          npm config set registry https://registry.npmjs.org/
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
