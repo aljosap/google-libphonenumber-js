@@ -32,29 +32,74 @@ jobs:
           latest=$(curl -s https://api.github.com/repos/google/libphonenumber/releases/latest | jq -r .tag_name)
           echo "latest_tag=$latest" >> $GITHUB_OUTPUT
 
-      - name: Download Closure Compiler
+      - name: Download and verify Closure Compiler
         run: |
           CLOSURE_VERSION="v20240421"
-          curl -LO "https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/${CLOSURE_VERSION}/closure-compiler-${CLOSURE_VERSION}.jar"
-          mv closure-compiler-${CLOSURE_VERSION}.jar closure-compiler.jar
+          CLOSURE_URL="https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/${CLOSURE_VERSION}/closure-compiler-${CLOSURE_VERSION}.jar"
+          
+          echo "Downloading Closure Compiler from ${CLOSURE_URL}"
+          
+          # Create a temporary directory for downloads
+          mkdir -p tmp
+          cd tmp
+          
+          # Download with curl and follow redirects
+          if ! curl -L -o closure-compiler.jar "${CLOSURE_URL}"; then
+            echo "Failed to download Closure Compiler"
+            exit 1
+          fi
+          
+          # Verify the JAR file
+          if ! file closure-compiler.jar | grep -q "Java archive data"; then
+            echo "Downloaded file is not a valid JAR file"
+            exit 1
+          fi
+          
+          # Move to parent directory if verification passed
+          mv closure-compiler.jar ../
+          cd ..
+          rm -rf tmp
+          
+          # Final verification
+          if ! java -jar closure-compiler.jar --version; then
+            echo "Closure Compiler verification failed"
+            exit 1
+          fi
+          
+          echo "Closure Compiler downloaded and verified successfully"
 
       - name: Clone libphonenumber and closure-library
         run: |
           git clone --depth 1 --branch ${{ steps.get_release.outputs.latest_tag }} https://github.com/google/libphonenumber.git
           git clone --depth 1 https://github.com/google/closure-library.git
 
-      # No build step needed! The JS sources are ready in libphonenumber/javascript/i18n/phonenumbers/
+      - name: Create build directories
+        run: |
+          mkdir -p dist
+          mkdir -p package/dist
 
       - name: Run Closure Compiler
         run: |
-          mkdir -p dist
+          # Debug information
+          echo "Current directory: $(pwd)"
+          echo "Contents of current directory: $(ls -la)"
+          echo "Checking Closure Compiler: $(file closure-compiler.jar)"
+          
+          # List JS source files
+          echo "JS files in libphonenumber:"
+          find libphonenumber/javascript/i18n/phonenumbers -name "*.js" -type f
+          
+          echo "JS files in closure-library:"
+          find closure-library/closure/goog -name "*.js" -type f
+          
+          # Run Closure Compiler with full paths
           java -jar closure-compiler.jar \
             --js_output_file=dist/libphonenumber.js \
             --compilation_level=ADVANCED \
             --language_in=ECMASCRIPT5 \
             --language_out=ECMASCRIPT5 \
-            --js='libphonenumber/javascript/i18n/phonenumbers/*.js' \
-            --js='closure-library/closure/goog/**/*.js' \
+            --js="$(pwd)/libphonenumber/javascript/i18n/phonenumbers/*.js" \
+            --js="$(pwd)/closure-library/closure/goog/**/*.js" \
             --entry_point=i18n.phonenumbers.PhoneNumberUtil \
             --dependency_mode=PRUNE \
             --generate_exports \
@@ -77,7 +122,6 @@ jobs:
 
       - name: Prepare npm package
         run: |
-          mkdir -p package/dist
           cp dist/libphonenumber.js package/dist/
           # Optionally copy typings and metadata if you have them
           # cp path/to/index.d.ts package/
