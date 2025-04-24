@@ -1,0 +1,93 @@
+name: Update libphonenumber JavaScript
+
+on:
+  workflow_dispatch: # manual trigger
+  schedule:
+    - cron: '0 3 * * *' # daily at 3am UTC
+
+jobs:
+  update-libphonenumber:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get latest libphonenumber release
+        id: get_release
+        run: |
+          latest=$(curl -s https://api.github.com/repos/google/libphonenumber/releases/latest | jq -r .tag_name)
+          echo "latest_tag=$latest" >> $GITHUB_OUTPUT
+
+      - name: Read current version
+        id: read_version
+        run: |
+          if [ -f LIBPHONENUMBER_VERSION ]; then
+            current=$(cat LIBPHONENUMBER_VERSION)
+          else
+            current=""
+          fi
+          echo "current_tag=$current" >> $GITHUB_OUTPUT
+
+      - name: Check if update is needed
+        id: check_update
+        run: |
+          if [ "${{ steps.get_release.outputs.latest_tag }}" = "${{ steps.read_version.outputs.current_tag }}" ]; then
+            echo "No update needed."
+            echo "update_needed=false" >> $GITHUB_OUTPUT
+          else
+            echo "Update needed."
+            echo "update_needed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Exit if no update needed
+        if: steps.check_update.outputs.update_needed == 'false'
+        run: exit 0
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openjdk-17-jdk maven git
+
+      - name: Clone libphonenumber
+        run: |
+          git clone --depth 1 --branch ${{ steps.get_release.outputs.latest_tag }} https://github.com/google/libphonenumber.git
+
+      - name: Generate JavaScript version
+        run: |
+          cd libphonenumber
+          # The following is the standard way to generate JS from libphonenumber
+          # See: https://github.com/google/libphonenumber#generating-javascript
+          ./gradlew jsBuild
+          cp -r javascript ../generated-js
+          cd ..
+          rm -rf libphonenumber
+
+      - name: Update generated code in repo
+        run: |
+          rm -rf src/libphonenumber-js
+          mkdir -p src/libphonenumber-js
+          cp -r generated-js/* src/libphonenumber-js/
+          rm -rf generated-js
+          echo "${{ steps.get_release.outputs.latest_tag }}" > LIBPHONENUMBER_VERSION
+
+      - name: Commit and push changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update libphonenumber to ${{ steps.get_release.outputs.latest_tag }}"
+          branch: main
+          file_pattern: 'src/libphonenumber-js/* LIBPHONENUMBER_VERSION'
+          push_options: '--force-with-lease'
+          commit_user_name: github-actions[bot]
+          commit_user_email: github-actions[bot]@users.noreply.github.com
+
+      # Optionally, you can add a step to publish to npm if you want to automate that as well
+      # - name: Publish to npm
+      #   run: npm publish
+      #   env:
+      #     NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
