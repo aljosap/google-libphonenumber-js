@@ -57,29 +57,110 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y openjdk-17-jdk maven git protobuf-compiler
 
-      - name: Clone libphonenumber
+      - name: Clone libphonenumber and closure-library
         run: |
           git clone --depth 1 --branch ${{ steps.get_release.outputs.latest_tag }} https://github.com/google/libphonenumber.git
+          git clone --depth 1 https://github.com/google/closure-library.git
 
       - name: Generate JavaScript version
         run: |
           cd libphonenumber
           mvn clean package -Pjavascript
-          echo "==== Contents of libphonenumber/javascript after build ===="
-          ls -lR javascript
-          cp -r javascript ../generated-js
           cd ..
-          rm -rf libphonenumber
 
-      - name: Update generated code in repo
+      - name: Bundle with Webpack
         run: |
-          rm -rf src/libphonenumber-js
-          mkdir -p src/libphonenumber-js
-          cp -r generated-js/* src/libphonenumber-js/
-          echo "==== Contents of src/libphonenumber-js after copy ===="
-          ls -lR src/libphonenumber-js
-          rm -rf generated-js
-          echo "${{ steps.get_release.outputs.latest_tag }}" > LIBPHONENUMBER_VERSION
+          mkdir -p build-workspace
+          cd build-workspace
+          npm init -y
+          npm install --save-dev webpack webpack-cli terser-webpack-plugin
+
+          mkdir -p src
+
+          # Create webpack entry point
+          cat > src/index.js << 'EOF'
+          // Set up closure library exports
+          if (typeof window === 'undefined') global.window = {};
+          window.goog = {};
+          window.COMPILED = false;
+
+          // Import closure library base
+          require('../../closure-library/closure/goog/base.js');
+          require('../../closure-library/closure/goog/reflect/reflect.js');
+          require('../../closure-library/closure/goog/math/math.js');
+          require('../../closure-library/closure/goog/math/long.js');
+          require('../../closure-library/closure/goog/string/string.js');
+          require('../../closure-library/closure/goog/asserts/asserts.js');
+          require('../../closure-library/closure/goog/proto2/message.js');
+
+          // Import libphonenumber
+          require('../../libphonenumber/javascript/i18n/phonenumbers/phonemetadata.pb.js');
+          require('../../libphonenumber/javascript/i18n/phonenumbers/phonenumber.pb.js');
+          require('../../libphonenumber/javascript/i18n/phonenumbers/metadata.js');
+          require('../../libphonenumber/javascript/i18n/phonenumbers/phonenumberutil.js');
+          require('../../libphonenumber/javascript/i18n/phonenumbers/asyoutypeformatter.js');
+          require('../../libphonenumber/javascript/i18n/phonenumbers/shortnumberinfo.js');
+
+          // Export the library
+          const phoneUtil = i18n.phonenumbers.PhoneNumberUtil.getInstance();
+
+          module.exports = {
+            PhoneNumberUtil: i18n.phonenumbers.PhoneNumberUtil,
+            PhoneNumber: i18n.phonenumbers.PhoneNumber,
+            PhoneNumberFormat: i18n.phonenumbers.PhoneNumberFormat,
+            PhoneNumberType: i18n.phonenumbers.PhoneNumberType,
+            AsYouTypeFormatter: i18n.phonenumbers.AsYouTypeFormatter,
+            ShortNumberInfo: i18n.phonenumbers.ShortNumberInfo,
+            getInstance: () => phoneUtil
+          };
+          EOF
+
+          # Create webpack config
+          cat > webpack.config.js << 'EOF'
+          const path = require('path');
+          const TerserPlugin = require('terser-webpack-plugin');
+
+          module.exports = {
+            entry: './src/index.js',
+            output: {
+              path: path.resolve(__dirname, 'dist'),
+              filename: 'libphonenumber.js',
+              library: {
+                name: 'libphonenumber',
+                type: 'umd',
+                export: 'default'
+              },
+              globalObject: 'this'
+            },
+            optimization: {
+              minimize: true,
+              minimizer: [
+                new TerserPlugin({
+                  terserOptions: {
+                    format: {
+                      comments: false,
+                    },
+                  },
+                  extractComments: false,
+                }),
+              ],
+            },
+            mode: 'production'
+          };
+          EOF
+
+          npx webpack
+
+          mkdir -p ../src/libphonenumber-js/dist
+          cp dist/libphonenumber.js ../src/libphonenumber-js/dist/
+
+          # Copy metadata and resources
+          cp -r ../libphonenumber/javascript/i18n/phonenumbers/metadata.js ../src/libphonenumber-js/
+          mkdir -p ../src/libphonenumber-js/resources
+          cp -r ../libphonenumber/javascript/i18n/phonenumbers/metadata.js ../src/libphonenumber-js/resources/
+
+          cd ..
+          rm -rf build-workspace libphonenumber closure-library
 
       - name: Determine next package version
         id: versioning
@@ -90,7 +171,7 @@ jobs:
             exit 1
           fi
           echo "Upstream version: $UPSTREAM_VERSION"
-          
+
           SUFFIX="aljosa"
           if [ -f MY_VERSION ]; then
             LAST_VERSION=$(cat MY_VERSION)
@@ -105,9 +186,8 @@ jobs:
           else
             NEXT_SUFFIX=1
           fi
-          
-          # NEXT_VERSION="${UPSTREAM_VERSION}-${SUFFIX}.${NEXT_SUFFIX}"
-          NEXT_VERSION="1.1.2"
+
+          NEXT_VERSION="${UPSTREAM_VERSION}-${SUFFIX}.${NEXT_SUFFIX}"
           if [ -z "$NEXT_VERSION" ]; then
             echo "Error: Could not determine next version"
             exit 1
@@ -129,28 +209,6 @@ jobs:
             echo "Error: Invalid semver format: $VERSION"
             exit 1
           fi
-
-      - name: List generated files
-        run: |
-          echo "==== Listing all files in src/libphonenumber-js ===="
-          find src/libphonenumber-js -type f
-
-      - name: Prepare dist directory and minify JS
-        run: |
-          cd src/libphonenumber-js
-          mkdir -p dist
-          # Try to find a likely main JS file
-          MAIN_JS=$(find . -type f -name "*.js" | grep -v "dist/" | grep -v "test" | grep -v "node_modules" | head -n1)
-          if [ -z "$MAIN_JS" ]; then
-            echo "Could not find main JS file!"
-            echo "==== Directory contents for debugging ===="
-            find . -type f
-            exit 1
-          fi
-          echo "Found main JS file: $MAIN_JS"
-          cp "$MAIN_JS" dist/libphonenumber.js
-          npm install terser
-          npx terser dist/libphonenumber.js -o dist/libphonenumber.min.js --compress --mangle
 
       - name: Generate TypeScript definitions
         run: |
@@ -290,12 +348,12 @@ jobs:
             "version": "$VERSION",
             "description": "JavaScript build of Google's libphonenumber library",
             "main": "dist/libphonenumber.js",
-            "browser": "dist/libphonenumber.min.js",
             "types": "index.d.ts",
             "files": [
               "dist/",
               "*.d.ts",
-              "resources/"
+              "resources/",
+              "metadata.js"
             ],
             "repository": {
               "type": "git",
