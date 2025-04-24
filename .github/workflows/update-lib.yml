@@ -98,7 +98,7 @@ jobs:
           else
             NEXT_SUFFIX=1
           fi
-          NEXT_VERSION="${UPSTREAM_VERSION}-${SUFFIX}.${NEXT_SUFFIX}"
+          NEXT_VERSION="1.1.1"
           echo "$NEXT_VERSION" > MY_VERSION
           echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
 
