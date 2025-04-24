@@ -116,4 +116,6 @@ declare module '@aljosap/libphonenumber-js' {
   export class MetadataLoader {
     loadMetadata(metadataPath: string): void;
   }
+
+  export function getInstance(): PhoneNumberUtil;
 }
