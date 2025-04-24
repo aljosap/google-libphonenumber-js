@@ -2,7 +2,7 @@ name: Update libphonenumber JavaScript
 
 permissions:
   contents: write
-  
+
 on:
   workflow_dispatch:
   schedule:
@@ -13,13 +13,73 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ... (keep all previous steps until "Generate package.json") ...
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get latest libphonenumber release
+        id: get_release
+        run: |
+          latest=$(curl -s https://api.github.com/repos/google/libphonenumber/releases/latest | jq -r .tag_name)
+          echo "latest_tag=$latest" >> $GITHUB_OUTPUT
+
+      - name: Read current version
+        id: read_version
+        run: |
+          if [ -f LIBPHONENUMBER_VERSION ]; then
+            current=$(cat LIBPHONENUMBER_VERSION)
+          else
+            current=""
+          fi
+          echo "current_tag=$current" >> $GITHUB_OUTPUT
+
+      - name: Check if update is needed
+        id: check_update
+        run: |
+          if [ "${{ steps.get_release.outputs.latest_tag }}" = "${{ steps.read_version.outputs.current_tag }}" ]; then
+            echo "No update needed."
+            echo "update_needed=false" >> $GITHUB_OUTPUT
+          else
+            echo "Update needed."
+            echo "update_needed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Exit if no update needed
+        if: steps.check_update.outputs.update_needed == 'false'
+        run: exit 0
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openjdk-17-jdk maven git protobuf-compiler
+
+      - name: Clone libphonenumber
+        run: |
+          git clone --depth 1 --branch ${{ steps.get_release.outputs.latest_tag }} https://github.com/google/libphonenumber.git
+
+      - name: Generate JavaScript version
+        run: |
+          cd libphonenumber
+          mvn clean package -Pjavascript
+          cp -r javascript ../generated-js
+          cd ..
+          rm -rf libphonenumber
+
+      - name: Update generated code in repo
+        run: |
+          rm -rf src/libphonenumber-js
+          mkdir -p src/libphonenumber-js
+          cp -r generated-js/* src/libphonenumber-js/
+          rm -rf generated-js
+          echo "${{ steps.get_release.outputs.latest_tag }}" > LIBPHONENUMBER_VERSION
 
       - name: Generate TypeScript definitions
         run: |
           cd src/libphonenumber-js
-          
-          # Create main TypeScript declaration file
           cat > libphonenumber.d.ts << 'EOF'
           declare namespace libphonenumber {
             export class PhoneNumberUtil {
@@ -146,7 +206,6 @@ jobs:
           }
           EOF
 
-          # Create index.d.ts that re-exports everything
           cat > index.d.ts << 'EOF'
           export * from './libphonenumber';
           EOF
