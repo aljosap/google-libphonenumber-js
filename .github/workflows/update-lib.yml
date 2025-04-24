@@ -57,72 +57,106 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y openjdk-17-jdk maven git protobuf-compiler
 
-      - name: Clone libphonenumber
+      - name: Clone libphonenumber and closure-library
         run: |
           git clone --depth 1 --branch ${{ steps.get_release.outputs.latest_tag }} https://github.com/google/libphonenumber.git
+          git clone --depth 1 https://github.com/google/closure-library.git
 
       - name: Generate JavaScript version
         run: |
           cd libphonenumber
           mvn clean package -Pjavascript
-          echo "==== Contents of libphonenumber/javascript after build ===="
-          ls -lR javascript
-          cp -r javascript ../generated-js
           cd ..
-          rm -rf libphonenumber
+          mkdir -p generated-js
+          cp -r libphonenumber/javascript/* generated-js/
+          cp -r closure-library/closure/goog generated-js/
+          rm -rf libphonenumber closure-library
+
+      - name: Create webpack config and entry point
+        run: |
+          cd generated-js
+          npm init -y
+          npm install --save-dev webpack webpack-cli terser-webpack-plugin
+          
+          # Create webpack.config.js
+          cat > webpack.config.js << 'EOF'
+          const path = require('path');
+          const TerserPlugin = require('terser-webpack-plugin');
+
+          module.exports = {
+            entry: './index.js',
+            output: {
+              path: path.resolve(__dirname, 'dist'),
+              filename: 'libphonenumber.js',
+              library: {
+                name: 'libphonenumber',
+                type: 'umd',
+                export: 'default'
+              },
+              globalObject: 'this'
+            },
+            optimization: {
+              minimize: true,
+              minimizer: [new TerserPlugin({
+                terserOptions: {
+                  format: {
+                    comments: false,
+                  },
+                },
+                extractComments: false,
+              })],
+            },
+            mode: 'production'
+          };
+          EOF
+
+          # Create index.js (entry point)
+          cat > index.js << 'EOF'
+          // Set up the goog namespace
+          var goog = {};
+          goog.global = global || window;
+          
+          // Load Closure Library base
+          require('./goog/base.js');
+          require('./goog/reflect/reflect.js');
+          require('./goog/math/math.js');
+          require('./goog/math/long.js');
+          require('./goog/string/string.js');
+          require('./goog/asserts/asserts.js');
+          require('./goog/proto2/message.js');
+          
+          // Load libphonenumber
+          require('./i18n/phonenumbers/phonemetadata.pb.js');
+          require('./i18n/phonenumbers/phonenumber.pb.js');
+          require('./i18n/phonenumbers/metadata.js');
+          require('./i18n/phonenumbers/phonenumberutil.js');
+          require('./i18n/phonenumbers/asyoutypeformatter.js');
+          require('./i18n/phonenumbers/shortnumberinfo.js');
+          
+          // Export the PhoneNumberUtil
+          const phoneUtil = i18n.phonenumbers.PhoneNumberUtil.getInstance();
+          
+          module.exports = {
+            PhoneNumberUtil: i18n.phonenumbers.PhoneNumberUtil,
+            PhoneNumber: i18n.phonenumbers.PhoneNumber,
+            PhoneNumberFormat: i18n.phonenumbers.PhoneNumberFormat,
+            PhoneNumberType: i18n.phonenumbers.PhoneNumberType,
+            AsYouTypeFormatter: i18n.phonenumbers.AsYouTypeFormatter,
+            ShortNumberInfo: i18n.phonenumbers.ShortNumberInfo,
+            getInstance: () => phoneUtil
+          };
+          EOF
+
+          # Build with webpack
+          npx webpack
 
       - name: Update generated code in repo
         run: |
           rm -rf src/libphonenumber-js
-          mkdir -p src/libphonenumber-js
-          cp -r generated-js/* src/libphonenumber-js/
-          echo "==== Contents of src/libphonenumber-js after copy ===="
-          ls -lR src/libphonenumber-js
-          rm -rf generated-js
+          mkdir -p src/libphonenumber-js/dist
+          cp generated-js/dist/libphonenumber.js src/libphonenumber-js/dist/
+          cp -r generated-js/i18n/phonenumbers/metadata.js src/libphonenumber-js/
           echo "${{ steps.get_release.outputs.latest_tag }}" > LIBPHONENUMBER_VERSION
-
-      - name: Determine next package version
-        id: versioning
-        run: |
-          UPSTREAM_VERSION=$(echo "${{ steps.get_release.outputs.latest_tag }}" | sed 's/^v//')
-          SUFFIX="aljosa"
-          if [ -f MY_VERSION ]; then
-            LAST_VERSION=$(cat MY_VERSION)
-            LAST_UPSTREAM=$(echo "$LAST_VERSION" | sed 's/-'"$SUFFIX"'.*//')
-            if [ "$LAST_UPSTREAM" = "$UPSTREAM_VERSION" ]; then
-              LAST_SUFFIX=$(echo "$LAST_VERSION" | sed 's/.*-'"$SUFFIX"'.//')
-              NEXT_SUFFIX=$((LAST_SUFFIX + 1))
-            else
-              NEXT_SUFFIX=1
-            fi
-          else
-            NEXT_SUFFIX=1
-          fi
-          NEXT_VERSION="1.1.1"
-          echo "$NEXT_VERSION" > MY_VERSION
-          echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
-
-      - name: List generated files
-        run: |
-          echo "==== Listing all files in src/libphonenumber-js ===="
-          find src/libphonenumber-js -type f
-
-      - name: Prepare dist directory and minify JS
-        run: |
-          cd src/libphonenumber-js
-          mkdir -p dist
-          # Try to find a likely main JS file
-          MAIN_JS=$(find . -type f -name "*.js" | grep -v "dist/" | grep -v "test" | grep -v "node_modules" | head -n1)
-          if [ -z "$MAIN_JS" ]; then
-            echo "Could not find main JS file!"
-            echo "==== Directory contents for debugging ===="
-            find . -type f
-            exit 1
-          fi
-          echo "Found main JS file: $MAIN_JS"
-          cp "$MAIN_JS" dist/libphonenumber.js
-          npm install terser
-          npx terser dist/libphonenumber.js -o dist/libphonenumber.min.js --compress --mangle
 
       - name: Generate TypeScript definitions
         run: |
@@ -144,6 +178,8 @@ jobs:
               findNumbers(text: string, defaultRegion?: string): PhoneNumberMatch[];
               parseAndKeepRawInput(number: string, regionCode?: string): PhoneNumber;
             }
+
+            export function getInstance(): PhoneNumberUtil;
 
             export class PhoneNumber {
               getCountryCode(): number;
@@ -242,10 +278,6 @@ jobs:
               TOLL_FREE = 2,
               UNKNOWN_COST = 3
             }
-
-            export class MetadataLoader {
-              loadMetadata(metadataPath: string): void;
-            }
           }
           EOF
 
@@ -257,12 +289,11 @@ jobs:
             "version": "${{ steps.versioning.outputs.next_version }}",
             "description": "JavaScript build of Google's libphonenumber library",
             "main": "dist/libphonenumber.js",
-            "browser": "dist/libphonenumber.min.js",
             "types": "index.d.ts",
             "files": [
               "dist/",
               "*.d.ts",
-              "resources/"
+              "metadata.js"
             ],
             "repository": {
               "type": "git",
@@ -275,14 +306,6 @@ jobs:
               "google",
               "typescript"
             ],
-            "devDependencies": {
-            "browserify": "^13.1.0",
-            "eslint": "^7.13.0",
-            "google-closure-compiler": "^20201102.0.1",
-            "google-closure-library": "^20201006.0.0",
-            "mocha": "^8.2.1",
-            "should": "^11.1.0"
-            },
             "author": "Aljosa Petkovic <aljosa3@gmail.com>",
             "license": "Apache-2.0",
             "homepage": "https://github.com/aljosap/google-libphonenumber-js#readme",
