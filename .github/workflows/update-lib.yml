@@ -81,7 +81,7 @@ jobs:
         id: versioning
         run: |
           UPSTREAM_VERSION=$(echo "${{ steps.get_release.outputs.latest_tag }}" | sed 's/^v//')
-          SUFFIX="aljosa"
+          SUFFIX="aljosa1"
           if [ -f MY_VERSION ]; then
             LAST_VERSION=$(cat MY_VERSION)
             LAST_UPSTREAM=$(echo "$LAST_VERSION" | sed 's/-'"$SUFFIX"'.*//')
