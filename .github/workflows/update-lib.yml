@@ -68,22 +68,90 @@ jobs:
           mvn clean package -Pjavascript
           cd ..
 
-      - name: Bundle with Webpack and custom goog
+      - name: Setup build workspace
         run: |
           mkdir -p build-workspace
           cd build-workspace
-          npm init -y
-          npm install --save-dev webpack webpack-cli terser-webpack-plugin
+          
+          # Initialize package.json with dev dependencies
+          cat > package.json << 'EOF'
+          {
+            "name": "build-workspace",
+            "version": "1.0.0",
+            "private": true,
+            "devDependencies": {
+              "webpack": "^5.89.0",
+              "webpack-cli": "^5.1.4",
+              "terser-webpack-plugin": "^5.3.9",
+              "google-closure-compiler": "^20231112.0.0",
+              "google-closure-library": "^20231110.0.0",
+              "browserify": "^17.0.0",
+              "eslint": "^8.54.0"
+            }
+          }
+          EOF
+          
+          # Install dependencies
+          npm install
 
           mkdir -p src
+          cd ..
 
-          # Create closure-exports.js to properly set up goog
+      - name: Bundle with Webpack and custom goog
+        run: |
+          cd build-workspace
+
+          # Create closure-exports.js with proper proto2.Message implementation
           cat > src/closure-exports.js << 'EOF'
           // Minimal goog namespace for libphonenumber
           var goog = (function() {
             var g = typeof window !== 'undefined' ? window : global;
             var goog = g.goog || {};
+
+            // Basic Message implementation
+            function Message() {}
+            Message.prototype.clone = function() { return new this.constructor().copyFrom(this); };
+            Message.prototype.copyFrom = function(other) {
+              for (var key in other) {
+                if (other.hasOwnProperty(key)) this[key] = other[key];
+              }
+              return this;
+            };
+            Message.prototype.clear = function() {
+              for (var key in this) {
+                if (this.hasOwnProperty(key)) delete this[key];
+              }
+            };
+            Message.prototype.equals = function(other) {
+              if (this === other) return true;
+              if (!other || this.constructor !== other.constructor) return false;
+              for (var key in this) {
+                if (this.hasOwnProperty(key) && this[key] !== other[key]) return false;
+              }
+              return true;
+            };
+            Message.prototype.getDescriptor = function() { return this.constructor.descriptor_; };
+            Message.prototype.has = function(field) { return this.hasOwnProperty(field); };
+            Message.prototype.initialized = function() { return true; };
+
+            // Set up goog namespace
             goog.global = g;
+            goog.proto2 = { Message: Message };
+            goog.proto2.FieldDescriptor = function() {};
+            goog.proto2.Descriptor = function(messageType, descriptorInfo) {
+              this.messageType_ = messageType;
+              this.fields_ = {};
+              if (descriptorInfo && descriptorInfo.length) {
+                for (var i = 0; i < descriptorInfo.length; i++) {
+                  var field = new goog.proto2.FieldDescriptor();
+                  this.fields_[i + 1] = field;
+                }
+              }
+            };
+            goog.proto2.Descriptor.prototype.getFields = function() {
+              return this.fields_;
+            };
+
             goog.exportSymbol = function(publicPath, object) {
               var parts = publicPath.split('.');
               var cur = g;
@@ -117,6 +185,18 @@ jobs:
               childCtor.prototype = new tempCtor();
               childCtor.prototype.constructor = childCtor;
             };
+            goog.defineClass = function(superClass, def) {
+              var constructor = def.constructor;
+              if (superClass) {
+                goog.inherits(constructor, superClass);
+              }
+              for (var key in def) {
+                if (key !== 'constructor') {
+                  constructor.prototype[key] = def[key];
+                }
+              }
+              return constructor;
+            };
             goog.typeOf = function(value) { return typeof value; };
             goog.isArrayLike = function(val) {
               if (!val) return false;
@@ -126,24 +206,53 @@ jobs:
             goog.isDef = function(val) { return val !== undefined; };
             goog.isDefAndNotNull = function(val) { return val != null; };
             goog.asserts = {
-              assert: function(condition) { if (!condition) throw new Error('Assertion failed'); },
-              assertInstanceof: function(object, type) {
-                if (!(object instanceof type)) throw new Error('Expected instanceof ' + type.name);
+              assert: function(condition, opt_message) {
+                if (!condition) {
+                  throw new Error(opt_message || 'Assertion failed');
+                }
+              },
+              assertInstanceof: function(object, type, opt_message) {
+                if (!(object instanceof type)) {
+                  throw new Error(opt_message || 'Expected instanceof ' + type.name);
+                }
               }
             };
             goog.array = {
-              forEach: function(arr, f) { arr.forEach(f); },
-              filter: function(arr, f) { return arr.filter(f); },
-              map: function(arr, f) { return arr.map(f); }
+              forEach: function(arr, f, opt_obj) {
+                if (opt_obj) f = f.bind(opt_obj);
+                arr.forEach(f);
+              },
+              filter: function(arr, f, opt_obj) {
+                if (opt_obj) f = f.bind(opt_obj);
+                return arr.filter(f);
+              },
+              map: function(arr, f, opt_obj) {
+                if (opt_obj) f = f.bind(opt_obj);
+                return arr.map(f);
+              }
             };
             goog.string = {
               internal: {},
               newlines: {},
               isEmpty: function(str) { return !str || str.length === 0; },
-              contains: function(str, substr) { return str.indexOf(substr) !== -1; }
+              contains: function(str, substr) { return str.indexOf(substr) !== -1; },
+              caseInsensitiveContains: function(str, subStr) {
+                return goog.string.contains(str.toLowerCase(), subStr.toLowerCase());
+              },
+              trim: function(str) {
+                return str.trim();
+              }
             };
-            goog.i18n = goog.i18n || {};
-            goog.i18n.phonenumbers = goog.i18n.phonenumbers || {};
+            goog.object = {
+              forEach: function(obj, f, opt_obj) {
+                for (var key in obj) {
+                  if (obj.hasOwnProperty(key)) {
+                    f.call(opt_obj, obj[key], key, obj);
+                  }
+                }
+              }
+            };
+            goog.i18n = { phonenumbers: {} };
             return goog;
           })();
 
@@ -217,8 +326,10 @@ jobs:
           };
           EOF
 
+          # Build with webpack
           npx webpack
 
+          # Copy built files to final location
           mkdir -p ../src/libphonenumber-js/dist
           cp dist/libphonenumber.js ../src/libphonenumber-js/dist/
 
@@ -255,7 +366,7 @@ jobs:
             NEXT_SUFFIX=1
           fi
 
-          NEXT_VERSION="1.1.4"
+          NEXT_VERSION="1.1.5"
           if [ -z "$NEXT_VERSION" ]; then
             echo "Error: Could not determine next version"
             exit 1
@@ -272,7 +383,6 @@ jobs:
             exit 1
           fi
           echo "Publishing version: $VERSION"
-          # Validate semver format
           if ! echo "$VERSION" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$' > /dev/null; then
             echo "Error: Invalid semver format: $VERSION"
             exit 1
@@ -400,6 +510,8 @@ jobs:
             export class MetadataLoader {
               loadMetadata(metadataPath: string): void;
             }
+
+            export function getInstance(): PhoneNumberUtil;
           }
           EOF
 
