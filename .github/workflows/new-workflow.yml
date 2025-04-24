@@ -34,8 +34,8 @@ jobs:
 
       - name: Download and verify Closure Compiler
         run: |
-          CLOSURE_VERSION="20240421"
-          CLOSURE_URL="https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/${CLOSURE_VERSION}/closure-compiler-${CLOSURE_VERSION}.jar"
+          CLOSURE_VERSION="v20250407"
+          CLOSURE_URL="https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/v20250407/closure-compiler-v20250407.jar"
           
           echo "Downloading Closure Compiler from ${CLOSURE_URL}"
           
