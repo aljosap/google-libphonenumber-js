@@ -24,7 +24,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y openjdk-17-jdk git
+          sudo apt-get install -y openjdk-21-jdk git unzip
 
       - name: Get latest libphonenumber release
         id: get_release
@@ -34,8 +34,8 @@ jobs:
 
       - name: Download and verify Closure Compiler
         run: |
-          CLOSURE_VERSION="v20250407"
-          CLOSURE_URL="https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/v20240317/closure-compiler-v20240317.jar"
+          CLOSURE_VERSION="v20250402"
+          CLOSURE_URL="https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/${CLOSURE_VERSION}/closure-compiler-${CLOSURE_VERSION}.jar"
           
           echo "Downloading Closure Compiler from ${CLOSURE_URL}"
           
@@ -49,8 +49,8 @@ jobs:
             exit 1
           fi
           
-          # Verify the JAR file
-          if ! file closure-compiler.jar | grep -q "Java archive data"; then
+          # Robust JAR check
+          if ! unzip -tq closure-compiler.jar > /dev/null; then
             echo "Downloaded file is not a valid JAR file"
             exit 1
           fi
@@ -80,19 +80,6 @@ jobs:
 
       - name: Run Closure Compiler
         run: |
-          # Debug information
-          echo "Current directory: $(pwd)"
-          echo "Contents of current directory: $(ls -la)"
-          echo "Checking Closure Compiler: $(file closure-compiler.jar)"
-          
-          # List JS source files
-          echo "JS files in libphonenumber:"
-          find libphonenumber/javascript/i18n/phonenumbers -name "*.js" -type f
-          
-          echo "JS files in closure-library:"
-          find closure-library/closure/goog -name "*.js" -type f
-          
-          # Run Closure Compiler with full paths
           java -jar closure-compiler.jar \
             --js_output_file=dist/libphonenumber.js \
             --compilation_level=ADVANCED \
