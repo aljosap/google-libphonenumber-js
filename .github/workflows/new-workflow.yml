@@ -86,17 +86,30 @@ jobs:
 
       - name: Run Closure Compiler
         run: |
+          # List all required source files explicitly
+          SOURCES=(
+            "$(pwd)/libphonenumber/javascript/i18n/phonenumbers/phonenumberutil.js"
+            "$(pwd)/libphonenumber/javascript/i18n/phonenumbers/metadata.js"
+            "$(pwd)/libphonenumber/javascript/i18n/phonenumbers/phonenumber.pb.js"
+            "$(pwd)/libphonenumber/javascript/i18n/phonenumbers/asyoutypeformatter.js"
+            "$(pwd)/libphonenumber/javascript/i18n/phonenumbers/phonemetadata.pb.js"
+          )
+          
+          # Convert array to space-separated string with --js prefix
+          JS_FILES=$(printf -- '--js=%s ' "${SOURCES[@]}")
+          
           java -jar closure-compiler.jar \
             --js_output_file=dist/libphonenumber.js \
             --compilation_level=ADVANCED \
             --language_in=ECMASCRIPT_2020 \
             --language_out=ECMASCRIPT_2015 \
-            --js="$(pwd)/libphonenumber/javascript/i18n/phonenumbers/*.js" \
+            ${JS_FILES} \
             --js="$(pwd)/closure-library/closure/goog/**/*.js" \
             --entry_point=i18n.phonenumbers.PhoneNumberUtil \
             --dependency_mode=PRUNE \
             --generate_exports \
             --process_common_js_modules \
+            --warning_level=QUIET \
             --output_wrapper="(function(){%output%}).call(this);"
 
       - name: Add Node.js export
