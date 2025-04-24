@@ -1,0 +1,29 @@
+{
+  "name": "@aljosap/libphonenumber-js",
+  "version": "9.0.3-aljosa1.1",
+  "description": "JavaScript build of Google's libphonenumber library",
+  "main": "libphonenumber.js",
+  "types": "libphonenumber.d.ts",
+  "files": [
+    "*.js",
+    "*.d.ts",
+    "resources/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aljosap/google-libphonenumber-js.git"
+  },
+  "keywords": [
+    "libphonenumber",
+    "phone",
+    "validation",
+    "google",
+    "typescript"
+  ],
+  "author": "Aljosa Petkovic <aljosa3@gmail.com>",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/aljosap/google-libphonenumber-js#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
