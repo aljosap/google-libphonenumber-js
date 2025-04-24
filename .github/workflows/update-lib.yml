@@ -61,9 +61,7 @@ jobs:
       - name: Generate JavaScript version
         run: |
           cd libphonenumber
-          # The following is the standard way to generate JS from libphonenumber
-          # See: https://github.com/google/libphonenumber#generating-javascript
-          ./gradlew jsBuild
+          mvn clean package -Pjavascript
           cp -r javascript ../generated-js
           cd ..
           rm -rf libphonenumber
