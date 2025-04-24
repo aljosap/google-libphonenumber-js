@@ -13,7 +13,135 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout this reponame: Build and Publish libphonenumber
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
       - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openjdk-17-jdk git
+
+      - name: Get latest libphonenumber release
+        id: get_release
+        run: |
+          latest=$(curl -s https://api.github.com/repos/google/libphonenumber/releases/latest | jq -r .tag_name)
+          echo "latest_tag=$latest" >> $GITHUB_OUTPUT
+
+      - name: Download Closure Compiler
+        run: |
+          CLOSURE_VERSION="v20240421"
+          curl -LO "https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/${CLOSURE_VERSION}/closure-compiler-${CLOSURE_VERSION}.jar"
+          mv closure-compiler-${CLOSURE_VERSION}.jar closure-compiler.jar
+
+      - name: Clone libphonenumber and closure-library
+        run: |
+          git clone --depth 1 --branch ${{ steps.get_release.outputs.latest_tag }} https://github.com/google/libphonenumber.git
+          git clone --depth 1 https://github.com/google/closure-library.git
+
+      # No build step needed! The JS sources are ready in libphonenumber/javascript/i18n/phonenumbers/
+
+      - name: Run Closure Compiler
+        run: |
+          mkdir -p dist
+          java -jar closure-compiler.jar \
+            --js_output_file=dist/libphonenumber.js \
+            --compilation_level=ADVANCED \
+            --language_in=ECMASCRIPT5 \
+            --language_out=ECMASCRIPT5 \
+            --js='libphonenumber/javascript/i18n/phonenumbers/*.js' \
+            --js='closure-library/closure/goog/**/*.js' \
+            --entry_point=i18n.phonenumbers.PhoneNumberUtil \
+            --dependency_mode=PRUNE \
+            --generate_exports \
+            --process_common_js_modules \
+            --output_wrapper="(function(){%output%}).call(this);"
+
+      - name: Add Node.js export
+        run: |
+          echo "module.exports = i18n.phonenumbers;" >> dist/libphonenumber.js
+
+      - name: Determine package version
+        id: versioning
+        run: |
+          # Remove leading 'v' from tag
+          UPSTREAM_VERSION=$(echo "${{ steps.get_release.outputs.latest_tag }}" | sed 's/^v//')
+          # Optionally, add a custom suffix (e.g., -custom.1)
+          PACKAGE_VERSION="${UPSTREAM_VERSION}-custom.1"
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Prepare npm package
+        run: |
+          mkdir -p package/dist
+          cp dist/libphonenumber.js package/dist/
+          # Optionally copy typings and metadata if you have them
+          # cp path/to/index.d.ts package/
+          # cp path/to/metadata.js package/
+          cat > package/package.json <<EOF
+          {
+            "name": "@your-scope/libphonenumber-js",
+            "version": "${PACKAGE_VERSION}",
+            "description": "Node.js build of Google's libphonenumber library (Closure Compiler official build)",
+            "main": "dist/libphonenumber.js",
+            "types": "index.d.ts",
+            "files": [
+              "dist/",
+              "*.d.ts"
+            ],
+            "repository": {
+              "type": "git",
+              "url": "https://github.com/your/repo.git"
+            },
+            "keywords": [
+              "libphonenumber",
+              "phone",
+              "validation",
+              "google",
+              "typescript"
+            ],
+            "author": "Your Name <your@email.com>",
+            "license": "Apache-2.0"
+          }
+          EOF
+
+      - name: Publish to npm
+        run: |
+          cd package
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
+          npm publish --access public
+          rm -f .npmrc
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Commit and push changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update libphonenumber to ${{ steps.get_release.outputs.latest_tag }} (version ${{ env.PACKAGE_VERSION }})"
+          branch: main
+          file_pattern: 'dist/* package/*'
+          push_options: '--force-with-lease'
+          commit_user_name: github-actions[bot]
+          commit_user_email: github-actions[bot]@users.noreply.github.com
         uses: actions/checkout@v4
 
       - name: Set up Node.js
