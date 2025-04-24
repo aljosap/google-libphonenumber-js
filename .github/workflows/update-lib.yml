@@ -102,7 +102,7 @@ jobs:
         run: |
           cd src/libphonenumber-js
           cat > libphonenumber.d.ts << 'EOF'
-          declare namespace libphonenumber {
+          declare module '@aljosap/libphonenumber-js' {
             export class PhoneNumberUtil {
               static getInstance(): PhoneNumberUtil;
               parse(number: string, region?: string): PhoneNumber;
@@ -221,14 +221,6 @@ jobs:
               loadMetadata(metadataPath: string): void;
             }
           }
-
-          declare module 'libphonenumber-js' {
-            export = libphonenumber;
-          }
-          EOF
-
-          cat > index.d.ts << 'EOF'
-          export * from './libphonenumber';
           EOF
 
       - name: Generate package.json in generated directory
