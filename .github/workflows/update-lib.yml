@@ -197,19 +197,23 @@ jobs:
             exit 1
           fi
 
-      - name: Generate TypeScript definitions
-        run: |
-          cd src/libphonenumber-js
-          cat > index.d.ts << 'EOF'
-          // ... (TypeScript definitions as in your original workflow)
-          EOF
+      # - name: Generate TypeScript definitions
+      #   run: |
+      #     cd src/libphonenumber-js
+      #     cat > index.d.ts << 'EOF'
+      #     // ... (TypeScript definitions as in your original workflow)
+      #     EOF
 
       - name: Generate package.json in generated directory
         run: |
           VERSION="${{ steps.versioning.outputs.next_version }}"
-          cat > src/libphonenumber-js/package.json <<EOF
+          if [ -z "$VERSION" ]; then
+            echo "Error: Version is empty"
+            exit 1
+          fi
+          cat > src/libphonenumber-js/package.json << EOF
           {
-            "name": "@aljosap/libphonenumber-js",
+          "name": "@aljosap/libphonenumber-js",
             "version": "$VERSION",
             "description": "JavaScript build of Google's libphonenumber library",
             "main": "dist/libphonenumber.js",
@@ -240,11 +244,9 @@ jobs:
             "devDependencies": {
               "browserify": "^13.1.0",
               "eslint": "^7.13.0",
-              "google-closure-compiler": "^20201102.0.1",
-              "google-closure-library": "^20201006.0.0",
               "mocha": "^8.2.1",
               "should": "^11.1.0"
-            },
+            }
           }
           EOF
 
