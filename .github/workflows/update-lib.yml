@@ -56,7 +56,7 @@ jobs:
         run: |
           git clone --depth 1 --branch ${{ steps.get_release.outputs.latest_tag }} https://github.com/google/libphonenumber.git
 
-- name: Prepare build workspace and dependencies
+      - name: Prepare build workspace and dependencies
         run: |
           mkdir -p build-workspace/src
           cp libphonenumber/javascript/i18n/phonenumbers/*.js build-workspace/src/
