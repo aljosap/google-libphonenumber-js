@@ -1,6 +1,6 @@
 {
-  "name": "@aljosap/libphonenumber-js",
-  "version": "1.1.6",
+"name": "@aljosap/libphonenumber-js",
+  "version": "9.0.4-aljosa.1",
   "description": "JavaScript build of Google's libphonenumber library",
   "main": "dist/libphonenumber.js",
   "types": "index.d.ts",
@@ -26,5 +26,11 @@
   "homepage": "https://github.com/aljosap/google-libphonenumber-js#readme",
   "engines": {
     "node": ">=14.0.0"
+  },
+  "devDependencies": {
+    "browserify": "^13.1.0",
+    "eslint": "^7.13.0",
+    "mocha": "^8.2.1",
+    "should": "^11.1.0"
   }
 }
