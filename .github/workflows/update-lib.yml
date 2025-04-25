@@ -217,10 +217,10 @@ jobs:
             "version": "$VERSION",
             "description": "JavaScript build of Google's libphonenumber library",
             "main": "dist/libphonenumber.js",
-            "types": "index.d.ts",
+            # "types": "index.d.ts",
             "files": [
               "dist/",
-              "*.d.ts",
+              # "*.d.ts",
               "resources/",
               "metadata.js"
             ],
