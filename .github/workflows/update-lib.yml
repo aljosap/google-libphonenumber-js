@@ -56,35 +56,31 @@ jobs:
         run: |
           git clone --depth 1 --branch ${{ steps.get_release.outputs.latest_tag }} https://github.com/google/libphonenumber.git
 
-      - name: Prepare build workspace and dependencies
+- name: Prepare build workspace and dependencies
         run: |
           mkdir -p build-workspace/src
           cp libphonenumber/javascript/i18n/phonenumbers/*.js build-workspace/src/
           cd build-workspace
           npm init -y
-          npm install --save-dev google-closure-compiler@20201102.0.1  google-closure-library@20201006.0.0 browserify@13.1.0 eslint@7.13.0 mocha@8.2.1 should@11.1.0
+          npm install --save-dev google-closure-compiler@20201102.0.1 google-closure-library@20201006.0.0 browserify@13.1.0 eslint@7.13.0 mocha@8.2.1 should@11.1.0
           
           # Create index.js with proper exports
           cat > src/index.js << 'EOF'
-          'use strict';
-
-            /**
-           * Require dependencies.
-           */
-
+          goog.provide('i18n.phonenumbers');
+          
           goog.require('i18n.phonenumbers.PhoneNumberUtil');
           goog.require('i18n.phonenumbers.ShortNumberInfo');
           goog.require('i18n.phonenumbers.AsYouTypeFormatter');
-
-            /**
-           * Export `libphonenumber`.
-             */
-
-          Object.defineProperty(exports, '__esModule', { value: true });
-
-          exports.default = i18n.phonenumbers;
-
-          module.exports = exports['default'];
+          
+          // Export the library
+          goog.exportSymbol('libphonenumber', {
+            PhoneNumberUtil: i18n.phonenumbers.PhoneNumberUtil,
+            ShortNumberInfo: i18n.phonenumbers.ShortNumberInfo,
+            AsYouTypeFormatter: i18n.phonenumbers.AsYouTypeFormatter,
+            getInstance: function() {
+              return i18n.phonenumbers.PhoneNumberUtil.getInstance();
+            }
+          });
           EOF
           cd ..
 
@@ -92,47 +88,51 @@ jobs:
         run: |
           cd build-workspace
           rm -rf dist && mkdir dist
+          
+          # First compile with Closure Compiler
           ./node_modules/.bin/google-closure-compiler \
-          --compilation_level=SIMPLE \
-          --warning_level=QUIET \
-          --js=node_modules/google-closure-library/closure/goog/array/array.js \
-          --js=node_modules/google-closure-library/closure/goog/asserts/asserts.js \
-          --js=node_modules/google-closure-library/closure/goog/base.js \ 
-          --js=node_modules/google-closure-library/closure/goog/debug/error.js \
-          --js=node_modules/google-closure-library/closure/goog/dom/asserts.js \
-          --js=node_modules/google-closure-library/closure/goog/dom/htmlelement.js \
-          --js=node_modules/google-closure-library/closure/goog/dom/nodetype.js \
-          --js=node_modules/google-closure-library/closure/goog/dom/safe.js \
-          --js=node_modules/google-closure-library/closure/goog/dom/tagname.js \
-          --js=node_modules/google-closure-library/closure/goog/dom/tags.js \
-          --js=node_modules/google-closure-library/closure/goog/fs/blob.js \
-          --js=node_modules/google-closure-library/closure/goog/fs/url.js \
-          --js=node_modules/google-closure-library/closure/goog/functions/functions.js \
-          --js=node_modules/google-closure-library/closure/goog/html/safehtml.js \
-          --js=node_modules/google-closure-library/closure/goog/html/safescript.js \
-          --js=node_modules/google-closure-library/closure/goog/html/safestyle.js \
-          --js=node_modules/google-closure-library/closure/goog/html/safestylesheet.js \
-          --js=node_modules/google-closure-library/closure/goog/html/safeurl.js \
-          --js=node_modules/google-closure-library/closure/goog/html/trustedresourceurl.js \
-          --js=node_modules/google-closure-library/closure/goog/html/trustedtypes.js \
-          --js=node_modules/google-closure-library/closure/goog/html/uncheckedconversions.js \
-          --js=node_modules/google-closure-library/closure/goog/i18n/bidi.js \
-          --js=node_modules/google-closure-library/closure/goog/labs/useragent/browser.js \
-          --js=node_modules/google-closure-library/closure/goog/labs/useragent/util.js \
-          --js=node_modules/google-closure-library/closure/goog/object/object.js \
-          --js=node_modules/google-closure-library/closure/goog/proto2/descriptor.js \
-          --js=node_modules/google-closure-library/closure/goog/proto2/fielddescriptor.js \
-          --js=node_modules/google-closure-library/closure/goog/proto2/lazydeserializer.js \
-          --js=node_modules/google-closure-library/closure/goog/proto2/message.js \
-          --js=node_modules/google-closure-library/closure/goog/proto2/pbliteserializer.js \
-          --js=node_modules/google-closure-library/closure/goog/proto2/serializer.js \
-          --js=node_modules/google-closure-library/closure/goog/string/const.js \
-          --js=node_modules/google-closure-library/closure/goog/string/const.js \
-          --js=node_modules/google-closure-library/closure/goog/string/const.js \
-          --js=node_modules/google-closure-library/closure/goog/string/internal.js \
-          --js=node_modules/google-closure-library/closure/goog/string/string.js \
-          --js=node_modules/google-closure-library/closure/goog/string/stringbuffer.js \
-          --js=node_modules/google-closure-library/closure/goog/string/typedstring.js \
+            --compilation_level=SIMPLE \
+            --warning_level=QUIET \
+            --process_common_js_modules \
+            --js=node_modules/google-closure-library/closure/goog/base.js \
+            --js=node_modules/google-closure-library/closure/goog/array/array.js \
+            --js=node_modules/google-closure-library/closure/goog/asserts/asserts.js \
+            --js=node_modules/google-closure-library/closure/goog/asserts/dom.js \
+            --js=node_modules/google-closure-library/closure/goog/debug/error.js \
+            --js=node_modules/google-closure-library/closure/goog/dom/asserts.js \
+            --js=node_modules/google-closure-library/closure/goog/dom/element.js \
+            --js=node_modules/google-closure-library/closure/goog/dom/htmlelement.js \
+            --js=node_modules/google-closure-library/closure/goog/dom/nodetype.js \
+            --js=node_modules/google-closure-library/closure/goog/dom/safe.js \
+            --js=node_modules/google-closure-library/closure/goog/dom/tagname.js \
+            --js=node_modules/google-closure-library/closure/goog/dom/tags.js \
+            --js=node_modules/google-closure-library/closure/goog/fs/blob.js \
+            --js=node_modules/google-closure-library/closure/goog/fs/url.js \
+            --js=node_modules/google-closure-library/closure/goog/functions/functions.js \
+            --js=node_modules/google-closure-library/closure/goog/html/safehtml.js \
+            --js=node_modules/google-closure-library/closure/goog/html/safescript.js \
+            --js=node_modules/google-closure-library/closure/goog/html/safestyle.js \
+            --js=node_modules/google-closure-library/closure/goog/html/safestylesheet.js \
+            --js=node_modules/google-closure-library/closure/goog/html/safeurl.js \
+            --js=node_modules/google-closure-library/closure/goog/html/trustedresourceurl.js \
+            --js=node_modules/google-closure-library/closure/goog/html/trustedtypes.js \
+            --js=node_modules/google-closure-library/closure/goog/html/uncheckedconversions.js \
+            --js=node_modules/google-closure-library/closure/goog/i18n/bidi.js \
+            --js=node_modules/google-closure-library/closure/goog/labs/useragent/browser.js \
+            --js=node_modules/google-closure-library/closure/goog/labs/useragent/util.js \
+            --js=node_modules/google-closure-library/closure/goog/labs/useragent/useragent.js \
+            --js=node_modules/google-closure-library/closure/goog/object/object.js \
+            --js=node_modules/google-closure-library/closure/goog/proto2/descriptor.js \
+            --js=node_modules/google-closure-library/closure/goog/proto2/fielddescriptor.js \
+            --js=node_modules/google-closure-library/closure/goog/proto2/lazydeserializer.js \
+            --js=node_modules/google-closure-library/closure/goog/proto2/message.js \
+            --js=node_modules/google-closure-library/closure/goog/proto2/pbliteserializer.js \
+            --js=node_modules/google-closure-library/closure/goog/proto2/serializer.js \
+            --js=node_modules/google-closure-library/closure/goog/string/const.js \
+            --js=node_modules/google-closure-library/closure/goog/string/internal.js \
+            --js=node_modules/google-closure-library/closure/goog/string/string.js \
+            --js=node_modules/google-closure-library/closure/goog/string/stringbuffer.js \
+            --js=node_modules/google-closure-library/closure/goog/string/typedstring.js \
             --js=src/index.js \
             --js=src/metadata.js \
             --js=src/phonemetadata.pb.js \
@@ -143,15 +143,14 @@ jobs:
             --js=src/asyoutypeformatter.js \
             --js_output_file=dist/libphonenumber.closure.js
 
-          ls
           # Then use browserify to create the final bundle
           ./node_modules/.bin/browserify dist/libphonenumber.closure.js \
             -s libphonenumber \
             -o dist/libphonenumber.js
-            
+
           # Clean up intermediate file
-            rm dist/libphonenumber.closure.js
-            cd ..
+          rm dist/libphonenumber.closure.js
+          cd ..
 
       - name: Copy build artifacts
         run: |
