@@ -143,6 +143,7 @@ jobs:
             --js=src/asyoutypeformatter.js \
             --js_output_file=dist/libphonenumber.closure.js
 
+          ls
           # Then use browserify to create the final bundle
           ./node_modules/.bin/browserify dist/libphonenumber.closure.js \
             -s libphonenumber \
