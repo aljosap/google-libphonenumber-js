@@ -120,7 +120,6 @@ jobs:
             --js=node_modules/google-closure-library/closure/goog/i18n/bidi.js \
             --js=node_modules/google-closure-library/closure/goog/labs/useragent/browser.js \
             --js=node_modules/google-closure-library/closure/goog/labs/useragent/util.js \
-            --js=node_modules/google-closure-library/closure/goog/labs/useragent/useragent.js \
             --js=node_modules/google-closure-library/closure/goog/object/object.js \
             --js=node_modules/google-closure-library/closure/goog/proto2/descriptor.js \
             --js=node_modules/google-closure-library/closure/goog/proto2/fielddescriptor.js \
