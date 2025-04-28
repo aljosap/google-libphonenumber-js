@@ -206,7 +206,7 @@ jobs:
               fi
               cat > src/libphonenumber-js/package.json << EOF
               {
-              "name": "google-libphonenumber-js",
+              "name": "@aljosap/google-libphonenumber-js",
                 "version": "$VERSION",
                 "description": "JavaScript build of Google's libphonenumber library",
                 "main": "dist/libphonenumber.js",
