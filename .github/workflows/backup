@@ -3,11 +3,6 @@ name: Update libphonenumber JavaScript
 permissions:
   contents: write
 
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 3 * * *'
-
 jobs:
   update-libphonenumber:
     runs-on: ubuntu-latest
@@ -60,42 +55,41 @@ jobs:
         run: |
           mkdir -p build-workspace/src
           cp libphonenumber/javascript/i18n/phonenumbers/*.js build-workspace/src/
-          cp src/index.js build-workspace/src/
           cd build-workspace
           npm init -y
           npm install --save-dev google-closure-compiler@20201102.0.1 google-closure-library@20201006.0.0 browserify@13.1.0 eslint@7.13.0 mocha@8.2.1 should@11.1.0
-          
+
           # Create index.js with proper exports
-          #          cat > src/index.js << 'EOF'
-          #          goog.provide('i18n.phonenumbers');
-          #
-          #          goog.require('i18n.phonenumbers.PhoneNumberUtil');
-          #          goog.require('i18n.phonenumbers.PhoneNumber');
-          #          goog.require('i18n.phonenumbers.PhoneNumberFormat');
-          #          goog.require('i18n.phonenumbers.PhoneNumberType');
-          #          goog.require('i18n.phonenumbers.AsYouTypeFormatter');
-          #          goog.require('i18n.phonenumbers.ShortNumberInfo');
-          #
-          #          // Export the library
-          #          const phoneUtil = i18n.phonenumbers.PhoneNumberUtil.getInstance();
-          #
-          #          module.exports = {
-          #            PhoneNumberUtil: i18n.phonenumbers.PhoneNumberUtil,
-          #            PhoneNumber: i18n.phonenumbers.PhoneNumber,
-          #            PhoneNumberFormat: i18n.phonenumbers.PhoneNumberFormat,
-          #            PhoneNumberType: i18n.phonenumbers.PhoneNumberType,
-          #            AsYouTypeFormatter: i18n.phonenumbers.AsYouTypeFormatter,
-          #            ShortNumberInfo: i18n.phonenumbers.ShortNumberInfo,
-          #            getInstance: () => phoneUtil
-          #          };
-          #          EOF
+          cat > src/index.js << 'EOF'
+          goog.provide('i18n.phonenumbers');
+
+          goog.require('i18n.phonenumbers.PhoneNumberUtil');
+          goog.require('i18n.phonenumbers.PhoneNumber');
+          goog.require('i18n.phonenumbers.PhoneNumberFormat');
+          goog.require('i18n.phonenumbers.PhoneNumberType');
+          goog.require('i18n.phonenumbers.AsYouTypeFormatter');
+          goog.require('i18n.phonenumbers.ShortNumberInfo');
+
+          // Export the library
+          const phoneUtil = i18n.phonenumbers.PhoneNumberUtil.getInstance();
+
+          module.exports = {
+            PhoneNumberUtil: i18n.phonenumbers.PhoneNumberUtil,
+            PhoneNumber: i18n.phonenumbers.PhoneNumber,
+            PhoneNumberFormat: i18n.phonenumbers.PhoneNumberFormat,
+            PhoneNumberType: i18n.phonenumbers.PhoneNumberType,
+            AsYouTypeFormatter: i18n.phonenumbers.AsYouTypeFormatter,
+            ShortNumberInfo: i18n.phonenumbers.ShortNumberInfo,
+            getInstance: () => phoneUtil
+          };
+          EOF
           cd ..
 
       - name: Build with Closure Compiler and Browserify
         run: |
           cd build-workspace
           rm -rf dist && mkdir dist
-          
+
           # First compile with Closure Compiler
           ./node_modules/.bin/google-closure-compiler \
             --compilation_level=SIMPLE \
@@ -172,17 +166,27 @@ jobs:
       - name: Determine next package version
         id: versioning
         run: |
-          if [ -f MY_VERSION ]; then
-          CURRENT_VERSION=$(cat MY_VERSION)
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
-          NEXT_PATCH=$((PATCH + 1))
-          NEXT_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}"
-          else
-          NEXT_VERSION="1.0.0"
+          UPSTREAM_VERSION=$(echo "${{ steps.get_release.outputs.latest_tag }}" | sed 's/^v//')
+          if [ -z "$UPSTREAM_VERSION" ]; then
+            echo "Error: Could not determine upstream version"
+            exit 1
           fi
+          SUFFIX="aljosa"
+          if [ -f MY_VERSION ]; then
+            LAST_VERSION=$(cat MY_VERSION)
+            LAST_UPSTREAM=$(echo "$LAST_VERSION" | sed 's/-'"$SUFFIX"'.*//')
+            if [ "$LAST_UPSTREAM" = "$UPSTREAM_VERSION" ]; then
+              LAST_SUFFIX=$(echo "$LAST_VERSION" | sed 's/.*-'"$SUFFIX"'.//')
+              NEXT_SUFFIX=$((LAST_SUFFIX + 1))
+            else
+              NEXT_SUFFIX=1
+            fi
+          else
+            NEXT_SUFFIX=1
+          fi
+          NEXT_VERSION="${UPSTREAM_VERSION}-${SUFFIX}.${NEXT_SUFFIX}"
           echo "$NEXT_VERSION" > MY_VERSION
           echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
-          echo "Version will be: $NEXT_VERSION"
 
       - name: Validate version before publishing
         run: |
@@ -192,83 +196,85 @@ jobs:
             exit 1
           fi
           echo "Publishing version: $VERSION"
-          if ! echo "$VERSION" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' > /dev/null; then
+          if ! echo "$VERSION" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$' > /dev/null; then
             echo "Error: Invalid semver format: $VERSION"
             exit 1
           fi
 
+      # - name: Generate TypeScript definitions
+      #   run: |
+      #     cd src/libphonenumber-js
+      #     cat > index.d.ts << 'EOF'
+      #     // ... (TypeScript definitions as in your original workflow)
+      #     EOF
+
       - name: Generate package.json in generated directory
         run: |
-              VERSION="${{ steps.versioning.outputs.next_version }}"
-              if [ -z "$VERSION" ]; then
-                echo "Error: Version is empty"
-                exit 1
-              fi
-              cat > src/libphonenumber-js/package.json << EOF
-              {
-              "name": "@aljosap/libphonenumber-js",
-                "version": "$VERSION",
-                "description": "JavaScript build of Google's libphonenumber library",
-                "main": "dist/libphonenumber.js",
-                "types": "index.d.ts",
-                "files": [
-                  "dist/",
-                  "*.d.ts",
-                  "resources/",
-                  "metadata.js"
-                ],
-                "repository": {
-                  "type": "git",
-                  "url": "https://github.com/aljosap/google-libphonenumber-js.git"
-                },
-                "keywords": [
-                  "libphonenumber",
-                  "phone",
-                  "validation",
-                  "google",
-                  "typescript"
-                ],
-                "author": "Aljosa Petkovic <aljosa3@gmail.com>",
-                "license": "Apache-2.0",
-                "homepage": "https://github.com/aljosap/google-libphonenumber-js#readme",
-                "engines": {
-                  "node": ">=14.0.0"
-                },
-                "devDependencies": {
-                  "browserify": "^13.1.0",
-                  "eslint": "^7.13.0",
-                  "mocha": "^8.2.1",
-                  "should": "^11.1.0"
-                }
-              }
-              EOF
+          VERSION="${{ steps.versioning.outputs.next_version }}"
+          if [ -z "$VERSION" ]; then
+            echo "Error: Version is empty"
+            exit 1
+          fi
+          cat > src/libphonenumber-js/package.json << EOF
+          {
+          "name": "@aljosap/libphonenumber-js",
+            "version": "$VERSION",
+            "description": "JavaScript build of Google's libphonenumber library",
+            "main": "dist/libphonenumber.js",
+            "types": "index.d.ts",
+            "files": [
+              "dist/",
+              "*.d.ts",
+              "resources/",
+              "metadata.js"
+            ],
+            "repository": {
+              "type": "git",
+              "url": "https://github.com/aljosap/google-libphonenumber-js.git"
+            },
+            "keywords": [
+              "libphonenumber",
+              "phone",
+              "validation",
+              "google",
+              "typescript"
+            ],
+            "author": "Aljosa Petkovic <aljosa3@gmail.com>",
+            "license": "Apache-2.0",
+            "homepage": "https://github.com/aljosap/google-libphonenumber-js#readme",
+            "engines": {
+              "node": ">=14.0.0"
+            },
+            "devDependencies": {
+              "browserify": "^13.1.0",
+              "eslint": "^7.13.0",
+              "mocha": "^8.2.1",
+              "should": "^11.1.0"
+            }
+          }
+          EOF
 
       - name: Setup Node.js for npm publishing
         uses: actions/setup-node@v4
         with:
-              node-version: '20'
-              registry-url: 'https://registry.npmjs.org/'
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org/'
 
       - name: Publish to npm
         run: |
-              cd src/libphonenumber-js
-              echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
-              npm publish --access public
-              rm -f .npmrc
-            env:
-              NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Write version values to files
-        run: |
-          echo "${{ steps.versioning.outputs.next_version }}" > MY_VERSION
-          echo "${{ steps.get_release.outputs.latest_tag }}" > LIBPHONENUMBER_VERSION
+          cd src/libphonenumber-js
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
+          npm publish --access public
+          rm -f .npmrc
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Commit and push changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore: update libphonenumber to ${{ steps.get_release.outputs.latest_tag }} (version ${{ steps.versioning.outputs.next_version }})"
           branch: main
-          file_pattern: src/libphonenumber-js/* LIBPHONENUMBER_VERSION MY_VERSION
+          file_pattern: 'src/libphonenumber-js/* LIBPHONENUMBER_VERSION MY_VERSION'
           push_options: '--force-with-lease'
           commit_user_name: github-actions[bot]
           commit_user_email: github-actions[bot]@users.noreply.github.com

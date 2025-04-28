@@ -3,11 +3,6 @@ name: Build and Publish libphonenumber
 permissions:
   contents: write
 
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 3 * * *'
-
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
