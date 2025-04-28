@@ -206,7 +206,7 @@ jobs:
               fi
               cat > src/libphonenumber-js/package.json << EOF
               {
-              "name": "@aljosap/google-libphonenumber-js",
+              "name": "@aljosap/libphonenumber-js",
                 "version": "$VERSION",
                 "description": "JavaScript build of Google's libphonenumber library",
                 "main": "dist/libphonenumber.js",
@@ -255,7 +255,7 @@ jobs:
               echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
               npm publish --access public
               rm -f .npmrc
-              env:
+        env:
               NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Write version values to files

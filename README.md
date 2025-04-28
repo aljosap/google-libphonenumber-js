@@ -1,17 +1,26 @@
-Info:
-=====
-Google's JavaScript library for parsing, formatting, and validating
-international phone numbers.
+JavaScript build of Google's libphonenumber library.
 
+## Installation
 
-How to use:
-===========
+```bash
+    npm install @aljosap/google-libphonenumber-js
 ```
-import {PhoneNumber, PhoneNumberUtil} from '@aljosap/libphonenumber-js'
 
-const t = PhoneNumberUtil.getInstance()
-const num = t.parse('+11 111 42145232222')
-const isValid = t.isValidNumber(num)
-console.log(JSON.stringify({num}));
-console.log(isValid);
+## Usage
+
+```typescript
+          import { PhoneNumberUtil, PhoneNumber } from '@aljosap/libphonenumber-js';
+
+          const phoneUtil = PhoneNumberUtil.getInstance();
+          // or
+          // import { getInstance } from '@aljosap/google-libphonenumber-js';
+          // const phoneUtil = getInstance();
+
+          const number = new PhoneNumber();
+          number.setRawInput('+38765111444');
+          const isValid = phoneUtil.isValidNumber(number);
 ```
+
+ ## License
+
+Apache-2.0
