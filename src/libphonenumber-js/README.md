@@ -1,24 +1,28 @@
+# @aljosap/libphonenumber-js
+
 JavaScript build of Google's libphonenumber library.
+
+**Google libphonenumber version:** `v9.0.4`
 
 ## Installation
 
 ```bash
-    npm install @aljosap/google-libphonenumber-js
+npm install @aljosap/libphonenumber-js
 ```
 
 ## Usage
 
 ```typescript
-          import { PhoneNumberUtil, PhoneNumber } from '@aljosap/libphonenumber-js';
+import { PhoneNumberUtil, PhoneNumber } from '@aljosap/libphonenumber-js';
 
-          const phoneUtil = PhoneNumberUtil.getInstance();
-          // or
-          // import { getInstance } from '@aljosap/google-libphonenumber-js';
-          // const phoneUtil = getInstance();
+const phoneUtil = PhoneNumberUtil.getInstance();
+// or
+// import { getInstance } from '@aljosap/libphonenumber-js';
+// const phoneUtil = getInstance();
 
-          const number = new PhoneNumber();
-          number.setRawInput('+38765111444');
-          const isValid = phoneUtil.isValidNumber(number);
+const number = new PhoneNumber();
+number.setRawInput('+38765222408');
+const isValid = phoneUtil.isValidNumber(number);
 ```
 
 ## License
