@@ -21,7 +21,7 @@ const phoneUtil = PhoneNumberUtil.getInstance();
 // const phoneUtil = getInstance();
 
 const number = new PhoneNumber();
-number.setRawInput('+38765222408');
+number.setRawInput('+38161111223');
 const isValid = phoneUtil.isValidNumber(number);
 ```
 
