@@ -243,6 +243,42 @@ jobs:
               }
               EOF
 
+      - name: Generate README.md
+        run: |
+          GOOGLE_VERSION=$(cat LIBPHONENUMBER_VERSION)
+          cat > src/libphonenumber-js/README.md << EOF
+          # @aljosap/google-libphonenumber-js
+
+          JavaScript build of Google's libphonenumber library.
+
+          **Google libphonenumber version:** \`${GOOGLE_VERSION}\`
+
+          ## Installation
+
+          \`\`\`bash
+          npm install @aljosap/google-libphonenumber-js
+          \`\`\`
+
+          ## Usage
+
+          \`\`\`typescript
+          import { PhoneNumberUtil, PhoneNumber } from '@aljosap/google-libphonenumber-js';
+
+          const phoneUtil = PhoneNumberUtil.getInstance();
+          // or
+          // import { getInstance } from '@aljosap/google-libphonenumber-js';
+          // const phoneUtil = getInstance();
+
+          const number = new PhoneNumber();
+          number.setRawInput('+38765222408');
+          const isValid = phoneUtil.isValidNumber(number);
+          \`\`\`
+
+          ## License
+
+          Apache-2.0
+          EOF
+
       - name: Setup Node.js for npm publishing
         uses: actions/setup-node@v4
         with:
