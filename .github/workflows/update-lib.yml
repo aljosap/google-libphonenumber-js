@@ -255,7 +255,7 @@ jobs:
               echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
               npm publish --access public
               rm -f .npmrc
-            env:
+              env:
               NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Write version values to files
