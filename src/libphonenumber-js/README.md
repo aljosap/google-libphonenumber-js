@@ -2,7 +2,7 @@
 
 JavaScript build of Google's libphonenumber library.
 
-**Google libphonenumber version:** `v9.0.5`
+**Google libphonenumber version:** `v9.0.6`
 
 ## Installation
 
