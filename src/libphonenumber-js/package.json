@@ -1,6 +1,6 @@
 {
 "name": "@aljosap/libphonenumber-js",
-  "version": "1.0.49",
+  "version": "1.0.50",
   "description": "JavaScript build of Google's libphonenumber library",
   "main": "dist/libphonenumber.js",
   "types": "index.d.ts",
